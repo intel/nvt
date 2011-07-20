@@ -23,7 +23,7 @@ char *name = "v4l2n";
 
 typedef unsigned char bool;
 
-struct {
+static struct {
 	char *device;
 	bool idsensor;
 	bool idflash;
@@ -31,7 +31,7 @@ struct {
 	.device = "/dev/video0",
 };
 
-struct {
+static struct {
 	int fd;
 } vars = {
 	.fd = -1,
