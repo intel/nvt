@@ -21,6 +21,8 @@ char *name = "v4l2n";
 #define STRINGIFY_(x)	#x
 #define STRINGIFY(x)	STRINGIFY_(x)
 
+#define SIZE(x)		(sizeof(x)/sizeof((x)[0]))
+
 typedef unsigned char bool;
 
 static struct {
@@ -35,6 +37,14 @@ static struct {
 	int fd;
 } vars = {
 	.fd = -1,
+};
+
+#define CONTROL(id)	{ V4L2_CID_##id, (#id) }
+static struct {
+	__u32 id;
+	char *name;
+} controls[] = {
+	CONTROL(BRIGHTNESS),
 };
 
 static void error(char *msg, ...)
@@ -68,7 +78,8 @@ static void usage(void)
 	printf(	"-h	Show this help\n"
 		"-d	/dev/videoX device node\n"
 		"--idsensor	Get sensor identification\n"
-		"--idflash	Get flash identification\n");
+		"--idflash	Get flash identification\n"
+		"--ctrl-list	List supported V4L2 controls\n");
 }
 
 static void get_options(int argc, char *argv[])
@@ -79,6 +90,7 @@ static void get_options(int argc, char *argv[])
 			{ "device", 1, NULL, 'd' },
 			{ "idsensor", 0, NULL, 1001 },
 			{ "idflash", 0, NULL, 1002 },
+			{ "ctrl-list", 0, NULL, 1003 },
 			{ 0, 0, 0, 0 }
 		};
 
@@ -102,6 +114,13 @@ static void get_options(int argc, char *argv[])
 		case 1002:
 			args.idflash = TRUE;
 			break;
+
+		case 1003: {
+			int i;
+			for (i = 0; i < SIZE(controls); i++)
+				printf("V4L2_CID_%s [0x%08X]\n", controls[i].name, controls[i].id);
+			exit(0);
+		}
 
 		default:
 			error("unknown option");
