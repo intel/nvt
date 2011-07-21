@@ -6,6 +6,7 @@
 #include <getopt.h>
 #include <string.h>
 #include <fcntl.h>
+#include <ctype.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
@@ -21,6 +22,7 @@ char *name = "v4l2n";
 #define STRINGIFY_(x)	#x
 #define STRINGIFY(x)	STRINGIFY_(x)
 
+#define CLEAR(x)	memset(&(x), 0, sizeof(x));
 #define SIZE(x)		(sizeof(x)/sizeof((x)[0]))
 
 typedef unsigned char bool;
@@ -29,6 +31,7 @@ static struct {
 	char *device;
 	bool idsensor;
 	bool idflash;
+	char *controls;
 } args = {
 	.device = "/dev/video0",
 };
@@ -39,6 +42,7 @@ static struct {
 	.fd = -1,
 };
 
+#define V4L2_CID	"V4L2_CID_"
 #define CONTROL(id)	{ V4L2_CID_##id, (#id) }
 static struct {
 	__u32 id;
@@ -79,7 +83,13 @@ static void usage(void)
 		"-d	/dev/videoX device node\n"
 		"--idsensor	Get sensor identification\n"
 		"--idflash	Get flash identification\n"
-		"--ctrl-list	List supported V4L2 controls\n");
+		"--ctrl-list	List supported V4L2 controls\n"
+		"--ctrl=$	Request given V4L2 controls\n"
+		"-c $\n"
+		"\n"
+		"List of V4L2 controls syntax: <[V4L2_CID_]control_name_or_id>[+][=value|?][,...]\n"
+		"where control_name_or_id is either symbolic name or numerical id.\n"
+		"When + is given, use extended controls, otherwise use old-style control call.");
 }
 
 static void get_options(int argc, char *argv[])
@@ -91,10 +101,11 @@ static void get_options(int argc, char *argv[])
 			{ "idsensor", 0, NULL, 1001 },
 			{ "idflash", 0, NULL, 1002 },
 			{ "ctrl-list", 0, NULL, 1003 },
+			{ "ctrl", 1, NULL, 'c' },
 			{ 0, 0, 0, 0 }
 		};
 
-		int c = getopt_long(argc, argv, "hd:", long_options, NULL);
+		int c = getopt_long(argc, argv, "hd:c:", long_options, NULL);
 		if (c == -1)
 			break;
 
@@ -122,10 +133,53 @@ static void get_options(int argc, char *argv[])
 			exit(0);
 		}
 
+		case 'c':
+			args.controls = optarg;
+			break;
+
 		default:
 			error("unknown option");
 		}
 	}
+}
+
+static __u32 get_control_id(char *name)
+{
+	__u32 id;
+
+	if (isdigit(*name)) {
+		int v;
+		if (sscanf(name, "%i", &v) != 1)
+			error("bad numeric id");
+		id = v;
+	} else {
+		int i;
+		for (i = 0; i < SIZE(controls); i++) {
+			if (strcmp(name, controls[i].name) == 0)
+				break;
+			if ((strlen(name) >= sizeof(V4L2_CID)) &&
+			    (memcmp(name, V4L2_CID, sizeof(V4L2_CID) - 1) == 0) &&
+			    (strcmp(name + sizeof(V4L2_CID) - 1, controls[i].name) == 0))
+				break;
+		}
+		if (i >= SIZE(controls))
+			error("unknown control");
+	}
+
+	return id;
+}
+
+static char *get_control_name(__u32 id)
+{
+	static char buf[11];
+	int i;
+
+	for (i = 0; i < SIZE(controls); i++)
+		if (controls[i].id == id)
+			return controls[i].name;
+
+	sprintf(buf, "0x%08X", id);
+	return buf;
 }
 
 static void open_device()
@@ -139,6 +193,115 @@ static void close_device()
 {
 	close(vars.fd);
 	vars.fd = -1;
+}
+
+static void v4l2_s_ctrl(__u32 id, __s32 val)
+{
+	struct v4l2_control c;
+
+	CLEAR(c);
+	c.id = id;
+	c.value = val;
+	xioctl(VIDIOC_S_CTRL, &c);
+	printf("VIDIOC_S_CTRL[%s] = %i\n", get_control_name(id), c.value);
+}
+
+static __s32 v4l2_g_ctrl(__u32 id)
+{
+	struct v4l2_control c;
+
+	CLEAR(c);
+	c.id = id;
+	xioctl(VIDIOC_G_CTRL, &c);
+	printf("VIDIOC_G_CTRL[%s] = %i\n", get_control_name(id), c.value);
+	return c.value;
+}
+
+static void v4l2_s_ext_ctrl(__u32 id, __s32 val)
+{
+	struct v4l2_ext_controls cs;
+	struct v4l2_ext_control c;
+
+	CLEAR(cs);
+	cs.ctrl_class = V4L2_CTRL_ID2CLASS(id);
+	cs.count = 1;
+	cs.controls = &c;
+
+	CLEAR(c);
+	c.id = id;
+	c.value = val;
+
+	xioctl(VIDIOC_S_EXT_CTRLS, &cs);
+	printf("VIDIOC_S_EXT_CTRLS[%s] = %i\n", get_control_name(id), c.value);
+}
+
+static __s32 v4l2_g_ext_ctrl(__u32 id)
+{
+	struct v4l2_ext_controls cs;
+	struct v4l2_ext_control c;
+
+	CLEAR(cs);
+	cs.ctrl_class = V4L2_CTRL_ID2CLASS(id);
+	cs.count = 1;
+	cs.controls = &c;
+
+	CLEAR(c);
+	c.id = id;
+
+	xioctl(VIDIOC_G_EXT_CTRLS, &cs);
+	printf("VIDIOC_G_EXT_CTRLS[%s] = %i\n", get_control_name(id), c.value);
+	return c.value;
+}
+
+static int isident(int c)
+{
+	return isalnum(c) || c == '_';
+}
+
+static void request_controls(char *start)
+{
+	char *end, *value;
+	bool ext, next;
+	char op;
+	__u32 id;
+	int val;
+
+	do {
+		for (end = start; isident(*end); end++);
+		value = end;
+		ext = FALSE;
+		if (*value == '+') {
+			value++;
+			ext = TRUE;
+		}
+		op = *value++;
+		*end = 0;
+		next = FALSE;
+		id = get_control_id(start);
+		if (op == '=') {
+			/* Set value */
+			for (end = value; isident(*end); end++);
+			if (*end == ',')
+				next = TRUE;
+			if (*end) *end++ = 0;
+			if (sscanf(value, "%i", &val) != 1)
+				error("bad control value");
+			if (ext)
+				v4l2_s_ext_ctrl(id, val);
+			else
+				v4l2_s_ctrl(id, val);
+		} else if (op == '?') {
+			/* Get value */
+			if (*value == ',')
+				next = TRUE;
+			end = value + 1;
+			if (ext)
+				v4l2_g_ext_ctrl(id);
+			else
+				v4l2_g_ctrl(id);
+		} else error("bad request for control");
+		start = end;
+	} while (next);
 }
 
 int main(int argc, char *argv[])
@@ -159,6 +322,9 @@ int main(int argc, char *argv[])
 		xioctl(ATOMISP_IOC_G_FLASH_MODEL_ID, &id);
 		printf("ATOMISP_IOC_G_FLASH_MODEL_ID: [%s]\n", id.model);
 	}
+
+	if (args.controls)
+		request_controls(args.controls);
 
 	close_device();
 	return 0;
