@@ -49,6 +49,14 @@ static struct {
 	char *name;
 } controls[] = {
 	CONTROL(BRIGHTNESS),
+
+	/* Flash controls */
+	CONTROL(FLASH_DURATION),
+	CONTROL(FLASH_INTENSITY),
+	CONTROL(TORCH_INTENSITY),
+	CONTROL(INDICATOR_INTENSITY),
+	CONTROL(FLASH_TRIGGER),
+	CONTROL(FLASH_MODE),
 };
 
 static void error(char *msg, ...)
