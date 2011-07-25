@@ -95,15 +95,16 @@ static void usage(void)
 		"--ctrl=$	Request given V4L2 controls\n"
 		"-c $\n"
 		"\n"
-		"List of V4L2 controls syntax: <[V4L2_CID_]control_name_or_id>[+][=value|?][,...]\n"
+		"List of V4L2 controls syntax: <[V4L2_CID_]control_name_or_id>[+][=value|?|#][,...]\n"
 		"where control_name_or_id is either symbolic name or numerical id.\n"
-		"When + is given, use extended controls, otherwise use old-style control call.");
+		"When + is given, use extended controls, otherwise use old-style control call.\n"
+		"\"=\" sets the value, \"?\" gets the current value, and \"#\" shows control info.\n");
 }
 
 static void get_options(int argc, char *argv[])
 {
 	while (1) {
-		static struct option long_options[] = {
+		static const struct option long_options[] = {
 			{ "help", 0, NULL, 'h' },
 			{ "device", 1, NULL, 'd' },
 			{ "idsensor", 0, NULL, 1001 },
@@ -243,6 +244,21 @@ static void v4l2_s_ext_ctrl(__u32 id, __s32 val)
 	printf("VIDIOC_S_EXT_CTRLS[%s] = %i\n", get_control_name(id), c.value);
 }
 
+static void v4l2_query_ctrl(__u32 id)
+{
+	struct v4l2_queryctrl q;
+
+	CLEAR(q);
+	q.id = id;
+	xioctl(VIDIOC_QUERYCTRL, &q);
+	printf("VIDIOC_QUERYCTRL[%s] =\n", get_control_name(id));
+	printf("  type:    %i\n", q.type);
+	printf("  name:    %32s\n", q.name);
+	printf("  limits:  %i..%i / %i\n", q.minimum, q.maximum, q.step);
+	printf("  default: %i\n", q.default_value);
+	printf("  flags:   %i\n", q.flags);
+}
+
 static __s32 v4l2_g_ext_ctrl(__u32 id)
 {
 	struct v4l2_ext_controls cs;
@@ -307,6 +323,12 @@ static void request_controls(char *start)
 				v4l2_g_ext_ctrl(id);
 			else
 				v4l2_g_ctrl(id);
+		} else if (op == '#') {
+			/* Query control */
+			if (*value == ',')
+				next = TRUE;
+			end = value + 1;
+			v4l2_query_ctrl(id);
 		} else error("bad request for control");
 		start = end;
 	} while (next);
