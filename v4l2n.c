@@ -151,9 +151,12 @@ static char *get_control_name(__u32 id)
 
 static void close_device()
 {
-	if (vars.fd != -1)
-		close(vars.fd);
+	if (vars.fd == -1)
+		return;
+
+	close(vars.fd);
 	vars.fd = -1;
+	print(1, "CLOSED video device\n");
 }
 
 static void open_device(const char *device)
@@ -165,6 +168,7 @@ static void open_device(const char *device)
 	close_device();	
 	if (!device || device[0] == 0)
 		device = DEFAULT_DEV;
+	print(1, "OPEN video device `%s'\n", device);
 	vars.fd = open(device, 0);
 	if (vars.fd == -1)
 		error("failed to open %s", device);
@@ -177,8 +181,8 @@ static void v4l2_s_ctrl(__u32 id, __s32 val)
 	CLEAR(c);
 	c.id = id;
 	c.value = val;
-	xioctl(VIDIOC_S_CTRL, &c);
 	print(1, "VIDIOC_S_CTRL[%s] = %i\n", get_control_name(id), c.value);
+	xioctl(VIDIOC_S_CTRL, &c);
 }
 
 static __s32 v4l2_g_ctrl(__u32 id)
@@ -206,8 +210,8 @@ static void v4l2_s_ext_ctrl(__u32 id, __s32 val)
 	c.id = id;
 	c.value = val;
 
-	xioctl(VIDIOC_S_EXT_CTRLS, &cs);
 	print(1, "VIDIOC_S_EXT_CTRLS[%s] = %i\n", get_control_name(id), c.value);
+	xioctl(VIDIOC_S_EXT_CTRLS, &cs);
 }
 
 static void v4l2_query_ctrl(__u32 id)
@@ -218,11 +222,11 @@ static void v4l2_query_ctrl(__u32 id)
 	q.id = id;
 	xioctl(VIDIOC_QUERYCTRL, &q);
 	print(1, "VIDIOC_QUERYCTRL[%s] =\n", get_control_name(id));
-	print(1, "  type:    %i\n", q.type);
-	print(1, "  name:    %32s\n", q.name);
-	print(1, "  limits:  %i..%i / %i\n", q.minimum, q.maximum, q.step);
-	print(1, "  default: %i\n", q.default_value);
-	print(1, "  flags:   %i\n", q.flags);
+	print(2, "  type:    %i\n", q.type);
+	print(2, "  name:    %32s\n", q.name);
+	print(2, "  limits:  %i..%i / %i\n", q.minimum, q.maximum, q.step);
+	print(2, "  default: %i\n", q.default_value);
+	print(2, "  flags:   %i\n", q.flags);
 }
 
 static __s32 v4l2_g_ext_ctrl(__u32 id)
