@@ -28,15 +28,6 @@ char *name = "v4l2n";
 typedef unsigned char bool;
 
 static struct {
-	char *device;
-	bool idsensor;
-	bool idflash;
-	char *controls;
-} args = {
-	.device = "/dev/video0",
-};
-
-static struct {
 	int fd;
 } vars = {
 	.fd = -1,
@@ -101,57 +92,6 @@ static void usage(void)
 		"\"=\" sets the value, \"?\" gets the current value, and \"#\" shows control info.\n");
 }
 
-static void get_options(int argc, char *argv[])
-{
-	while (1) {
-		static const struct option long_options[] = {
-			{ "help", 0, NULL, 'h' },
-			{ "device", 1, NULL, 'd' },
-			{ "idsensor", 0, NULL, 1001 },
-			{ "idflash", 0, NULL, 1002 },
-			{ "ctrl-list", 0, NULL, 1003 },
-			{ "ctrl", 1, NULL, 'c' },
-			{ 0, 0, 0, 0 }
-		};
-
-		int c = getopt_long(argc, argv, "hd:c:", long_options, NULL);
-		if (c == -1)
-			break;
-
-		switch (c) {
-		case 'h':
-			usage();
-			exit(0);
-
-		case 'd':
-			args.device = optarg;
-			break;
-
-		case 1001:
-			args.idsensor = TRUE;
-			break;
-
-		case 1002:
-			args.idflash = TRUE;
-			break;
-
-		case 1003: {
-			int i;
-			for (i = 0; i < SIZE(controls); i++)
-				printf("V4L2_CID_%s [0x%08X]\n", controls[i].name, controls[i].id);
-			exit(0);
-		}
-
-		case 'c':
-			args.controls = optarg;
-			break;
-
-		default:
-			error("unknown option");
-		}
-	}
-}
-
 static __u32 get_control_id(char *name)
 {
 	__u32 id;
@@ -191,17 +131,25 @@ static char *get_control_name(__u32 id)
 	return buf;
 }
 
-static void open_device()
-{
-	vars.fd = open(args.device, 0);
-	if (vars.fd == -1)
-		error("failed to open %s", args.device);
-}
-
 static void close_device()
 {
-	close(vars.fd);
+	if (vars.fd != -1)
+		close(vars.fd);
 	vars.fd = -1;
+}
+
+static void open_device(const char *device)
+{
+	static const char DEFAULT_DEV[] = "/dev/video0";
+	if (device == NULL && vars.fd != -1)
+		return;
+
+	close_device();	
+	if (!device || device[0] == 0)
+		device = DEFAULT_DEV;
+	vars.fd = open(device, 0);
+	if (vars.fd == -1)
+		error("failed to open %s", device);
 }
 
 static void v4l2_s_ctrl(__u32 id, __s32 val)
@@ -334,28 +282,71 @@ static void request_controls(char *start)
 	} while (next);
 }
 
+static void process_options(int argc, char *argv[])
+{
+	while (1) {
+		static const struct option long_options[] = {
+			{ "help", 0, NULL, 'h' },
+			{ "device", 1, NULL, 'd' },
+			{ "idsensor", 0, NULL, 1001 },
+			{ "idflash", 0, NULL, 1002 },
+			{ "ctrl-list", 0, NULL, 1003 },
+			{ "ctrl", 1, NULL, 'c' },
+			{ 0, 0, 0, 0 }
+		};
+
+		int c = getopt_long(argc, argv, "hd:c:", long_options, NULL);
+		if (c == -1)
+			break;
+
+		switch (c) {
+		case 'h':
+			usage();
+			return;
+
+		case 'd':
+			open_device(optarg);
+			break;
+
+		case 1001: {
+			struct atomisp_model_id id;
+			open_device(NULL);
+			xioctl(ATOMISP_IOC_G_SENSOR_MODEL_ID, &id);
+			printf("ATOMISP_IOC_G_SENSOR_MODEL_ID: [%s]\n", id.model);
+			break;
+		}
+
+		case 1002: {
+			struct atomisp_model_id id;
+			open_device(NULL);
+			xioctl(ATOMISP_IOC_G_FLASH_MODEL_ID, &id);
+			printf("ATOMISP_IOC_G_FLASH_MODEL_ID: [%s]\n", id.model);
+			break;
+		}
+
+		case 1003: {
+			int i;
+			for (i = 0; i < SIZE(controls); i++)
+				printf("V4L2_CID_%s [0x%08X]\n", controls[i].name, controls[i].id);
+			exit(0);
+		}
+
+		case 'c':
+			open_device(NULL);
+			request_controls(optarg);
+			break;
+
+		default:
+			error("unknown option");
+		}
+	}
+}
+
 int main(int argc, char *argv[])
 {
 	printf("Starting %s\n", name);
 	name = argv[0];
-	get_options(argc, argv);
-	open_device();
-
-	if (args.idsensor) {
-		struct atomisp_model_id id;
-		xioctl(ATOMISP_IOC_G_SENSOR_MODEL_ID, &id);
-		printf("ATOMISP_IOC_G_SENSOR_MODEL_ID: [%s]\n", id.model);
-	}
-
-	if (args.idflash) {
-		struct atomisp_model_id id;
-		xioctl(ATOMISP_IOC_G_FLASH_MODEL_ID, &id);
-		printf("ATOMISP_IOC_G_FLASH_MODEL_ID: [%s]\n", id.model);
-	}
-
-	if (args.controls)
-		request_controls(args.controls);
-
+	process_options(argc, argv);
 	close_device();
 	return 0;
 }
