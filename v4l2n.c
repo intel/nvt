@@ -380,7 +380,7 @@ static void process_options(int argc, char *argv[])
 			int i;
 			for (i = 0; i < SIZE(controls); i++)
 				print(1, "V4L2_CID_%s [0x%08X]\n", controls[i].name, controls[i].id);
-			exit(0);
+			return;
 		}
 
 		case 'c':
