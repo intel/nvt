@@ -28,8 +28,10 @@ char *name = "v4l2n";
 typedef unsigned char bool;
 
 static struct {
+	int verbosity;
 	int fd;
 } vars = {
+	.verbosity = 2,
 	.fd = -1,
 };
 
@@ -49,6 +51,18 @@ static struct {
 	CONTROL(FLASH_TRIGGER),
 	CONTROL(FLASH_MODE),
 };
+
+static void print(int lvl, char *msg, ...)
+{
+	va_list ap;
+
+	if (vars.verbosity < lvl)
+		return;
+
+	va_start(ap, msg);
+	vprintf(msg, ap);
+	va_end(ap);
+}
 
 static void error(char *msg, ...)
 {
@@ -77,8 +91,8 @@ static void xioctl_(char *ios, int ion, void *arg)
 
 static void usage(void)
 {
-	printf("Usage: %s [-h] [-d device] [--idsensor] [--idflash]\n", name);
-	printf(	"-h	Show this help\n"
+	print(1,"Usage: %s [-h] [-d device] [--idsensor] [--idflash]\n", name);
+	print(1,"-h	Show this help\n"
 		"--help\n"
 		"-d	/dev/videoX device node\n"
 		"--device\n"
@@ -164,7 +178,7 @@ static void v4l2_s_ctrl(__u32 id, __s32 val)
 	c.id = id;
 	c.value = val;
 	xioctl(VIDIOC_S_CTRL, &c);
-	printf("VIDIOC_S_CTRL[%s] = %i\n", get_control_name(id), c.value);
+	print(1, "VIDIOC_S_CTRL[%s] = %i\n", get_control_name(id), c.value);
 }
 
 static __s32 v4l2_g_ctrl(__u32 id)
@@ -174,7 +188,7 @@ static __s32 v4l2_g_ctrl(__u32 id)
 	CLEAR(c);
 	c.id = id;
 	xioctl(VIDIOC_G_CTRL, &c);
-	printf("VIDIOC_G_CTRL[%s] = %i\n", get_control_name(id), c.value);
+	print(1, "VIDIOC_G_CTRL[%s] = %i\n", get_control_name(id), c.value);
 	return c.value;
 }
 
@@ -193,7 +207,7 @@ static void v4l2_s_ext_ctrl(__u32 id, __s32 val)
 	c.value = val;
 
 	xioctl(VIDIOC_S_EXT_CTRLS, &cs);
-	printf("VIDIOC_S_EXT_CTRLS[%s] = %i\n", get_control_name(id), c.value);
+	print(1, "VIDIOC_S_EXT_CTRLS[%s] = %i\n", get_control_name(id), c.value);
 }
 
 static void v4l2_query_ctrl(__u32 id)
@@ -203,12 +217,12 @@ static void v4l2_query_ctrl(__u32 id)
 	CLEAR(q);
 	q.id = id;
 	xioctl(VIDIOC_QUERYCTRL, &q);
-	printf("VIDIOC_QUERYCTRL[%s] =\n", get_control_name(id));
-	printf("  type:    %i\n", q.type);
-	printf("  name:    %32s\n", q.name);
-	printf("  limits:  %i..%i / %i\n", q.minimum, q.maximum, q.step);
-	printf("  default: %i\n", q.default_value);
-	printf("  flags:   %i\n", q.flags);
+	print(1, "VIDIOC_QUERYCTRL[%s] =\n", get_control_name(id));
+	print(1, "  type:    %i\n", q.type);
+	print(1, "  name:    %32s\n", q.name);
+	print(1, "  limits:  %i..%i / %i\n", q.minimum, q.maximum, q.step);
+	print(1, "  default: %i\n", q.default_value);
+	print(1, "  flags:   %i\n", q.flags);
 }
 
 static __s32 v4l2_g_ext_ctrl(__u32 id)
@@ -225,7 +239,7 @@ static __s32 v4l2_g_ext_ctrl(__u32 id)
 	c.id = id;
 
 	xioctl(VIDIOC_G_EXT_CTRLS, &cs);
-	printf("VIDIOC_G_EXT_CTRLS[%s] = %i\n", get_control_name(id), c.value);
+	print(1, "VIDIOC_G_EXT_CTRLS[%s] = %i\n", get_control_name(id), c.value);
 	return c.value;
 }
 
@@ -291,6 +305,8 @@ static void process_options(int argc, char *argv[])
 	while (1) {
 		static const struct option long_options[] = {
 			{ "help", 0, NULL, 'h' },
+			{ "verbose", 2, NULL, 'v' },
+			{ "quiet", 0, NULL, 'q' },
 			{ "device", 1, NULL, 'd' },
 			{ "input", 1, NULL, 'i' },
 			{ "idsensor", 0, NULL, 1001 },
@@ -300,7 +316,7 @@ static void process_options(int argc, char *argv[])
 			{ 0, 0, 0, 0 }
 		};
 
-		int c = getopt_long(argc, argv, "hd:i:c:", long_options, NULL);
+		int c = getopt_long(argc, argv, "hv::qd:i:c:", long_options, NULL);
 		if (c == -1)
 			break;
 
@@ -308,6 +324,18 @@ static void process_options(int argc, char *argv[])
 		case 'h':
 			usage();
 			return;
+
+		case 'v':
+			if (optarg) {
+				vars.verbosity = atoi(optarg);
+			} else {
+				vars.verbosity++;
+			}
+			break;
+		
+		case 'q':
+			vars.verbosity--;
+			break;
 
 		case 'd':
 			open_device(optarg);
@@ -319,10 +347,10 @@ static void process_options(int argc, char *argv[])
 			if (optarg[0] == '?') {
 				/* G_INPUT */
 				xioctl(VIDIOC_G_INPUT, &i);
-				printf("VIDIOC_G_INPUT -> %i\n", i);
+				print(1, "VIDIOC_G_INPUT -> %i\n", i);
 			} else {
 				i = atoi(optarg);
-				printf("VIDIOC_S_INPUT <- %i\n", i);
+				print(1, "VIDIOC_S_INPUT <- %i\n", i);
 				xioctl(VIDIOC_S_INPUT, &i);
 			}
 			break;
@@ -332,7 +360,7 @@ static void process_options(int argc, char *argv[])
 			struct atomisp_model_id id;
 			open_device(NULL);
 			xioctl(ATOMISP_IOC_G_SENSOR_MODEL_ID, &id);
-			printf("ATOMISP_IOC_G_SENSOR_MODEL_ID: [%s]\n", id.model);
+			print(1, "ATOMISP_IOC_G_SENSOR_MODEL_ID: [%s]\n", id.model);
 			break;
 		}
 
@@ -340,14 +368,14 @@ static void process_options(int argc, char *argv[])
 			struct atomisp_model_id id;
 			open_device(NULL);
 			xioctl(ATOMISP_IOC_G_FLASH_MODEL_ID, &id);
-			printf("ATOMISP_IOC_G_FLASH_MODEL_ID: [%s]\n", id.model);
+			print(1, "ATOMISP_IOC_G_FLASH_MODEL_ID: [%s]\n", id.model);
 			break;
 		}
 
 		case 1003: {
 			int i;
 			for (i = 0; i < SIZE(controls); i++)
-				printf("V4L2_CID_%s [0x%08X]\n", controls[i].name, controls[i].id);
+				print(1, "V4L2_CID_%s [0x%08X]\n", controls[i].name, controls[i].id);
 			exit(0);
 		}
 
@@ -364,7 +392,7 @@ static void process_options(int argc, char *argv[])
 
 int main(int argc, char *argv[])
 {
-	printf("Starting %s\n", name);
+	print(1, "Starting %s\n", name);
 	name = argv[0];
 	process_options(argc, argv);
 	close_device();
