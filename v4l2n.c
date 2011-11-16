@@ -79,7 +79,11 @@ static void usage(void)
 {
 	printf("Usage: %s [-h] [-d device] [--idsensor] [--idflash]\n", name);
 	printf(	"-h	Show this help\n"
+		"--help\n"
 		"-d	/dev/videoX device node\n"
+		"--device\n"
+		"-i	Set/get input device\n"
+		"--input\n"
 		"--idsensor	Get sensor identification\n"
 		"--idflash	Get flash identification\n"
 		"--ctrl-list	List supported V4L2 controls\n"
@@ -288,6 +292,7 @@ static void process_options(int argc, char *argv[])
 		static const struct option long_options[] = {
 			{ "help", 0, NULL, 'h' },
 			{ "device", 1, NULL, 'd' },
+			{ "input", 1, NULL, 'i' },
 			{ "idsensor", 0, NULL, 1001 },
 			{ "idflash", 0, NULL, 1002 },
 			{ "ctrl-list", 0, NULL, 1003 },
@@ -295,7 +300,7 @@ static void process_options(int argc, char *argv[])
 			{ 0, 0, 0, 0 }
 		};
 
-		int c = getopt_long(argc, argv, "hd:c:", long_options, NULL);
+		int c = getopt_long(argc, argv, "hd:i:c:", long_options, NULL);
 		if (c == -1)
 			break;
 
@@ -307,6 +312,21 @@ static void process_options(int argc, char *argv[])
 		case 'd':
 			open_device(optarg);
 			break;
+
+		case 'i': {	/* S/G_INPUT */
+			int i;
+			open_device(NULL);
+			if (optarg[0] == '?') {
+				/* G_INPUT */
+				xioctl(VIDIOC_G_INPUT, &i);
+				printf("VIDIOC_G_INPUT -> %i\n", i);
+			} else {
+				i = atoi(optarg);
+				printf("VIDIOC_S_INPUT <- %i\n", i);
+				xioctl(VIDIOC_S_INPUT, &i);
+			}
+			break;
+		}
 
 		case 1001: {
 			struct atomisp_model_id id;
