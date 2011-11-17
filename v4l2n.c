@@ -10,8 +10,8 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
-#include <linux/videodev2.h>
 
+#include "linux/videodev2.h"
 #include "linux/atomisp.h"
 
 char *name = "v4l2n";
@@ -86,6 +86,88 @@ static const struct symbol_list buf_types[] = {
 	SYMBOL_END
 };
 
+#define V4L2_PIX_FMT	"V4L2_PIX_FMT_"
+#define PIXFMT(id)	{ V4L2_PIX_FMT_##id, (#id) }
+static const struct symbol_list pixelformats[] = {
+	PIXFMT(RGB332),
+	PIXFMT(RGB444),
+	PIXFMT(RGB555),
+	PIXFMT(RGB565),
+	PIXFMT(RGB555X),
+	PIXFMT(RGB565X),
+	PIXFMT(BGR24),
+	PIXFMT(RGB24),
+	PIXFMT(BGR32),
+	PIXFMT(RGB32),
+	PIXFMT(GREY),
+	PIXFMT(Y4),
+	PIXFMT(Y6),
+	PIXFMT(Y10),
+	PIXFMT(Y16),
+	PIXFMT(PAL8),
+	PIXFMT(YVU410),
+	PIXFMT(YVU420),
+	PIXFMT(YUYV),
+	PIXFMT(YYUV),
+	PIXFMT(YVYU),
+	PIXFMT(UYVY),
+	PIXFMT(VYUY),
+	PIXFMT(YUV422P),
+	PIXFMT(YUV411P),
+	PIXFMT(Y41P),
+	PIXFMT(YUV444),
+	PIXFMT(YUV555),
+	PIXFMT(YUV565),
+	PIXFMT(YUV32),
+	PIXFMT(YUV410),
+	PIXFMT(YUV420),
+	PIXFMT(HI240),
+	PIXFMT(HM12),
+	PIXFMT(NV12),
+	PIXFMT(NV21),
+	PIXFMT(NV16),
+	PIXFMT(NV61),
+	PIXFMT(SBGGR8),
+	PIXFMT(SGBRG8),
+	PIXFMT(SGRBG8),
+	PIXFMT(SRGGB8),
+	PIXFMT(SBGGR10),
+	PIXFMT(SGBRG10),
+	PIXFMT(SGRBG10),
+	PIXFMT(SRGGB10),
+	PIXFMT(SBGGR12),
+	PIXFMT(SGBRG12),
+	PIXFMT(SGRBG12),
+	PIXFMT(SRGGB12),
+	PIXFMT(SGRBG10DPCM8),
+	PIXFMT(SBGGR16),
+	PIXFMT(MJPEG),
+	PIXFMT(JPEG),
+	PIXFMT(DV),
+	PIXFMT(MPEG),
+	PIXFMT(CPIA1),
+	PIXFMT(WNVA),
+	PIXFMT(SN9C10X),
+	PIXFMT(SN9C20X_I420),
+	PIXFMT(PWC1),
+	PIXFMT(PWC2),
+	PIXFMT(ET61X251),
+	PIXFMT(SPCA501),
+	PIXFMT(SPCA505),
+	PIXFMT(SPCA508),
+	PIXFMT(SPCA561),
+	PIXFMT(PAC207),
+	PIXFMT(MR97310A),
+	PIXFMT(SN9C2028),
+	PIXFMT(SQ905C),
+	PIXFMT(PJPG),
+	PIXFMT(OV511),
+	PIXFMT(OV518),
+	PIXFMT(STV0680),
+	PIXFMT(TM6000),
+	SYMBOL_END
+};
+
 static void print(int lvl, char *msg, ...)
 {
 	va_list ap;
@@ -132,17 +214,28 @@ static void usage(void)
 		"--device\n"
 		"-i	Set/get input device (VIDIOC_S/G_INPUT)\n"
 		"--input\n"
-		"--parm		Set/get parameters (VIDIOC_G/S_PARM)\n"
+		"--parm		Set/get parameters (VIDIOC_S/G_PARM)\n"
+		"-t		Try format (VIDIOC_TRY_FORMAT)\n"
+		"--try_fmt\n"
+		"-f		Set/get format (VIDIOC_S/G_FMT)\n"
+		"--fmt\n"
 		"--idsensor	Get sensor identification\n"
 		"--idflash	Get flash identification\n"
 		"--ctrl-list	List supported V4L2 controls\n"
 		"--ctrl=$	Request given V4L2 controls\n"
+		"--fmt-list	List supported pixel formats\n"
 		"-c $	(VIDIOC_QUERYCAP / VIDIOC_S/G_CTRL / VIDIOC_S/G_EXT_CTRLS)\n"
 		"\n"
 		"List of V4L2 controls syntax: <[V4L2_CID_]control_name_or_id>[+][=value|?|#][,...]\n"
 		"where control_name_or_id is either symbolic name or numerical id.\n"
 		"When + is given, use extended controls, otherwise use old-style control call.\n"
 		"\"=\" sets the value, \"?\" gets the current value, and \"#\" shows control info.\n");
+}
+
+static void symbol_dump(const char *prefix, const struct symbol_list *list) {
+	int i;
+	for (i = 0; list[i].symbol != NULL; i++)
+		print(0, "%s%s [0x%08X]\n", prefix, list[i].symbol, list[i].id);
 }
 
 static int symbol_get(const struct symbol_list *list, const char **symbol) {
@@ -266,7 +359,10 @@ static const char *symbol_str(int id, const struct symbol_list list[]) {
 			break;
 
 	if (list[i].symbol) {
-		sprintf(buffer, "%s (%i)", list[i].symbol, id);
+		if (id < 1000)
+			sprintf(buffer, "%s [%i]", list[i].symbol, id);
+		else
+			sprintf(buffer, "%s [0x%08X]", list[i].symbol, id);
 	} else {
 		sprintf(buffer, "%i", id);
 	}
@@ -349,6 +445,70 @@ static void vidioc_parm(const char *s) {
 
 	if (*s != '?') {
 		xioctl(VIDIOC_S_PARM, &p);
+	}
+}
+
+static void vidioc_fmt(bool try, const char *s) {
+	static const struct token_list list[] = {
+		{ 't', TOKEN_F_ARG, "type", buf_types },
+		{ 'w', TOKEN_F_ARG, "width", NULL },
+		{ 'h', TOKEN_F_ARG, "height", NULL },
+		{ 'p', TOKEN_F_ARG, "pixelformat", pixelformats },
+		{ 'f', TOKEN_F_ARG, "field", NULL },
+		{ 'b', TOKEN_F_ARG, "bytesperline", NULL },
+		{ 's', TOKEN_F_ARG, "sizeimage", NULL },
+		{ 'c', TOKEN_F_ARG, "colorspace", NULL },
+		{ 'r', TOKEN_F_ARG, "priv", NULL },
+		TOKEN_END
+	};
+	struct v4l2_format p;
+
+	CLEAR(p);
+	p.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+
+	while (*s && *s!='?') {
+		int val[4];
+		int c;
+
+		c = token_get(list, &s, val);
+		switch (c) {
+		case 't': p.type = val[0]; break;
+		case 'w': p.fmt.pix.width = val[0]; break;
+		case 'h': p.fmt.pix.height = val[0]; break;
+		case 'p': p.fmt.pix.pixelformat = val[0]; break;
+		case 'f': p.fmt.pix.field = val[0]; break;
+		case 'b': p.fmt.pix.bytesperline = val[0]; break;
+		case 's': p.fmt.pix.sizeimage = val[0]; break;
+		case 'c': p.fmt.pix.colorspace = val[0]; break;
+		case 'r': p.fmt.pix.priv = val[0]; break;
+		}
+		if (*s && *s==',') s++;
+	}
+
+	if (try) {
+		print(1, "VIDIOC_TRY_FMT\n");
+		xioctl(VIDIOC_TRY_FMT, &p);
+	} else if (*s == '?') {
+		print(1, "VIDIOC_G_FMT\n");
+		xioctl(VIDIOC_G_FMT, &p);
+	} else {
+		print(1, "VIDIOC_S_FMT\n");
+	}
+
+	print(2, ": type:          %s\n", symbol_str(p.type, buf_types));
+	if (p.type == V4L2_BUF_TYPE_VIDEO_CAPTURE) {
+		print(2, ": width:         %i\n", p.fmt.pix.width);
+		print(2, ": height:        %i\n", p.fmt.pix.height);
+		print(2, ": pixelformat:   %s\n", symbol_str(p.fmt.pix.pixelformat, pixelformats));
+		print(2, ": field:         %i\n", p.fmt.pix.field);
+		print(2, ": bytesperline:  %i\n", p.fmt.pix.bytesperline);
+		print(2, ": sizeimage:     %i\n", p.fmt.pix.sizeimage);
+		print(2, ": colorspace:    %i\n", p.fmt.pix.colorspace);
+		print(2, ": priv:          %i\n", p.fmt.pix.priv);
+	}
+
+	if (!try && *s != '?') {
+		xioctl(VIDIOC_S_FMT, &p);
 	}
 }
 
@@ -556,23 +716,26 @@ static void process_options(int argc, char *argv[])
 			{ "device", 1, NULL, 'd' },
 			{ "input", 1, NULL, 'i' },
 			{ "parm", 1, NULL, 'p' },
+			{ "try_fmt", 1, NULL, 't' },
+			{ "fmt", 1, NULL, 'f' },
 			{ "idsensor", 0, NULL, 1001 },
 			{ "idflash", 0, NULL, 1002 },
 			{ "ctrl-list", 0, NULL, 1003 },
+			{ "fmt-list", 0, NULL, 1004 },
 			{ "ctrl", 1, NULL, 'c' },
 			{ 0, 0, 0, 0 }
 		};
 
-		int c = getopt_long(argc, argv, "hv::qd:i:p:c:", long_options, NULL);
+		int c = getopt_long(argc, argv, "hv::qd:i:p:t:f:c:", long_options, NULL);
 		if (c == -1)
 			break;
 
 		switch (c) {
-		case 'h':
+		case 'h':	/* --help, -h */
 			usage();
 			return;
 
-		case 'v':
+		case 'v':	/* --verbose, -v */
 			if (optarg) {
 				vars.verbosity = atoi(optarg);
 			} else {
@@ -580,15 +743,15 @@ static void process_options(int argc, char *argv[])
 			}
 			break;
 		
-		case 'q':
+		case 'q':	/* --quiet, -q */
 			vars.verbosity--;
 			break;
 
-		case 'd':
+		case 'd':	/* --device, -d */
 			open_device(optarg);
 			break;
 
-		case 'i': {	/* S/G_INPUT */
+		case 'i': {	/* --input, -i, VIDIOC_S/G_INPUT */
 			int i;
 			open_device(NULL);
 			if (strchr(optarg, '?')) {
@@ -604,12 +767,22 @@ static void process_options(int argc, char *argv[])
 			break;
 		}
 
-		case 'p':	/* S/G_PARM */
+		case 'p':	/* --parm, -p, VIDIOC_S/G_PARM */
 			open_device(NULL);
 			vidioc_parm(optarg);
 			break;
 
-		case 1001: {
+		case 't':	/* --try-fmt, -t, VIDIOC_TRY_FMT */
+			open_device(NULL);
+			vidioc_fmt(TRUE, optarg);
+			break;
+
+		case 'f':	/* --fmt, -f, VIDIOC_S/G_FMT */
+			open_device(NULL);
+			vidioc_fmt(FALSE, optarg);
+			break;
+
+		case 1001: {	/* --idsensor */
 			struct atomisp_model_id id;
 			open_device(NULL);
 			xioctl(ATOMISP_IOC_G_SENSOR_MODEL_ID, &id);
@@ -617,7 +790,7 @@ static void process_options(int argc, char *argv[])
 			break;
 		}
 
-		case 1002: {
+		case 1002: {	/* --idflash */
 			struct atomisp_model_id id;
 			open_device(NULL);
 			xioctl(ATOMISP_IOC_G_FLASH_MODEL_ID, &id);
@@ -625,14 +798,15 @@ static void process_options(int argc, char *argv[])
 			break;
 		}
 
-		case 1003: {
-			int i;
-			for (i = 0; controls[i].symbol != NULL; i++)
-				print(1, "V4L2_CID_%s [0x%08X]\n", controls[i].symbol, controls[i].id);
+		case 1003:	/* --ctrl-list */
+			symbol_dump(V4L2_CID, controls);
 			return;
-		}
 
-		case 'c':
+		case 1004:	/* --fmt-list */
+			symbol_dump(V4L2_PIX_FMT, pixelformats);
+			return;
+
+		case 'c':	/* --ctrl, -c, VIDIOC_QUERYCAP / VIDIOC_S/G_CTRL / VIDIOC_S/G_EXT_CTRLS */
 			open_device(NULL);
 			request_controls(optarg);
 			break;
