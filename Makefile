@@ -1,4 +1,4 @@
-OPT = -Wall -m32 -static -g
+OPT = -Wall -m32 -static -g -I.
 
 .PHONY: all clean
 all: v4l2n
