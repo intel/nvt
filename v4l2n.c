@@ -31,9 +31,13 @@ typedef unsigned char bool;
 static struct {
 	int verbosity;
 	int fd;
+	struct v4l2_requestbuffers reqbufs;
 } vars = {
 	.verbosity = 2,
 	.fd = -1,
+	.reqbufs.count = 2,
+	.reqbufs.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
+	.reqbufs.memory = V4L2_MEMORY_USERPTR,
 };
 
 struct symbol_list {
@@ -219,6 +223,8 @@ static void usage(void)
 		"--try_fmt\n"
 		"-f		Set/get format (VIDIOC_S/G_FMT)\n"
 		"--fmt\n"
+		"-r		Request buffers (VIDIOC_REQBUFS)\n"
+		"--reqbufs\n"
 		"--idsensor	Get sensor identification\n"
 		"--idflash	Get flash identification\n"
 		"--ctrl-list	List supported V4L2 controls\n"
@@ -346,6 +352,8 @@ static int token_get(const struct token_list *list, const char **token, int val[
 			error("token does not have an argument but should have");
 	}
 
+	/* Go to the beginning of next token in the list */
+	if (*end && *end==',') end++;
 	*token = end;
 	return r;
 }
@@ -395,14 +403,11 @@ static void vidioc_parm(const char *s) {
 	struct v4l2_streamparm p;
 
 	CLEAR(p);
-	p.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	p.type = vars.reqbufs.type;
 
 	while (*s && *s!='?') {
 		int val[4];
-		int c;
-
-		c = token_get(list, &s, val);
-		switch (c) {
+		switch (token_get(list, &s, val)) {
 		case 't': p.type = val[0]; break;
 		case 'b': if (p.type == V4L2_BUF_TYPE_VIDEO_CAPTURE) p.parm.capture.capability = val[0];
 			  else  p.parm.output.capability = val[0];
@@ -420,7 +425,6 @@ static void vidioc_parm(const char *s) {
 		case 'r': p.parm.capture.readbuffers = val[0]; break;
 		case 'o': p.parm.output.outputmode = val[0]; break;
 		}
-		if (*s && *s==',') s++;
 	}
 
 	if (*s == '?') {
@@ -464,14 +468,11 @@ static void vidioc_fmt(bool try, const char *s) {
 	struct v4l2_format p;
 
 	CLEAR(p);
-	p.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	p.type = vars.reqbufs.type;
 
 	while (*s && *s!='?') {
 		int val[4];
-		int c;
-
-		c = token_get(list, &s, val);
-		switch (c) {
+		switch (token_get(list, &s, val)) {
 		case 't': p.type = val[0]; break;
 		case 'w': p.fmt.pix.width = val[0]; break;
 		case 'h': p.fmt.pix.height = val[0]; break;
@@ -482,7 +483,6 @@ static void vidioc_fmt(bool try, const char *s) {
 		case 'c': p.fmt.pix.colorspace = val[0]; break;
 		case 'r': p.fmt.pix.priv = val[0]; break;
 		}
-		if (*s && *s==',') s++;
 	}
 
 	if (try) {
@@ -510,6 +510,36 @@ static void vidioc_fmt(bool try, const char *s) {
 	if (!try && *s != '?') {
 		xioctl(VIDIOC_S_FMT, &p);
 	}
+}
+
+static void vidioc_reqbufs(const char *s) {
+	static const struct symbol_list memory[] = {
+		{ V4L2_MEMORY_MMAP, "MMAP" },
+		{ V4L2_MEMORY_USERPTR, "USERPTR" },
+		SYMBOL_END
+	};
+	static const struct token_list list[] = {
+		{ 'c', TOKEN_F_ARG, "count", NULL },
+		{ 't', TOKEN_F_ARG, "type", buf_types },
+		{ 'm', TOKEN_F_ARG, "memory", memory },
+		TOKEN_END
+	};
+	struct v4l2_requestbuffers *p = &vars.reqbufs;
+
+	while (*s && *s!='?') {
+		int val[4];
+		switch (token_get(list, &s, val)) {
+		case 'c': p->count = val[0]; break;
+		case 't': p->type = val[0]; break;
+		case 'm': p->memory = val[0]; break;
+		}
+	}
+
+	print(1, "VIDIOC_REQBUFS\n");
+	print(2, ": count:   %i\n", p->count);
+	print(2, ": type:    %s\n", symbol_str(p->type, buf_types));
+	print(2, ": memory:  %s\n", symbol_str(p->memory, memory));
+	xioctl(VIDIOC_REQBUFS, p);
 }
 
 static __u32 get_control_id(char *name)
@@ -718,6 +748,7 @@ static void process_options(int argc, char *argv[])
 			{ "parm", 1, NULL, 'p' },
 			{ "try_fmt", 1, NULL, 't' },
 			{ "fmt", 1, NULL, 'f' },
+			{ "reqbufs", 1, NULL, 'r' },
 			{ "idsensor", 0, NULL, 1001 },
 			{ "idflash", 0, NULL, 1002 },
 			{ "ctrl-list", 0, NULL, 1003 },
@@ -726,7 +757,7 @@ static void process_options(int argc, char *argv[])
 			{ 0, 0, 0, 0 }
 		};
 
-		int c = getopt_long(argc, argv, "hv::qd:i:p:t:f:c:", long_options, NULL);
+		int c = getopt_long(argc, argv, "hv::qd:i:p:t:f:r:c:", long_options, NULL);
 		if (c == -1)
 			break;
 
@@ -780,6 +811,11 @@ static void process_options(int argc, char *argv[])
 		case 'f':	/* --fmt, -f, VIDIOC_S/G_FMT */
 			open_device(NULL);
 			vidioc_fmt(FALSE, optarg);
+			break;
+
+		case 'r':	/* --reqbufs, -r, VIDIOC_REQBUFS */
+			open_device(NULL);
+			vidioc_reqbufs(optarg);
 			break;
 
 		case 1001: {	/* --idsensor */
