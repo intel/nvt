@@ -238,13 +238,15 @@ static void usage(void)
 		"\"=\" sets the value, \"?\" gets the current value, and \"#\" shows control info.\n");
 }
 
-static void symbol_dump(const char *prefix, const struct symbol_list *list) {
+static void symbol_dump(const char *prefix, const struct symbol_list *list)
+{
 	int i;
 	for (i = 0; list[i].symbol != NULL; i++)
 		print(0, "%s%s [0x%08X]\n", prefix, list[i].symbol, list[i].id);
 }
 
-static int symbol_get(const struct symbol_list *list, const char **symbol) {
+static int symbol_get(const struct symbol_list *list, const char **symbol)
+{
 	const char *start;
 	const char *end;
 	int r, i;
@@ -278,7 +280,8 @@ static int symbol_get(const struct symbol_list *list, const char **symbol) {
 	return r;
 }
 
-static void value_get(int *val, int n, const char **ptr)  {
+static void value_get(int *val, int n, const char **ptr)
+{
 	const char *s = *ptr;
 	bool paren = FALSE;
 	int i;
@@ -313,7 +316,8 @@ static void value_get(int *val, int n, const char **ptr)  {
 	*ptr = s;
 }
 
-static int token_get(const struct token_list *list, const char **token, int val[4]) {
+static int token_get(const struct token_list *list, const char **token, int val[4])
+{
 	const char *start;
 	const char *end;
 	int r, i;
@@ -358,7 +362,8 @@ static int token_get(const struct token_list *list, const char **token, int val[
 	return r;
 }
 
-static const char *symbol_str(int id, const struct symbol_list list[]) {
+static const char *symbol_str(int id, const struct symbol_list list[])
+{
 	static char buffer[200];
 	int i;
 
@@ -377,7 +382,8 @@ static const char *symbol_str(int id, const struct symbol_list list[]) {
 	return buffer;
 }
 
-static void vidioc_parm(const char *s) {
+static void vidioc_parm(const char *s)
+{
 	static const struct symbol_list capturemode[] = {
 		{ V4L2_MODE_HIGHQUALITY, "V4L2_MODE_HIGHQUALITY" },
 		{ CI_MODE_PREVIEW, "CI_MODE_PREVIEW" },
@@ -452,7 +458,8 @@ static void vidioc_parm(const char *s) {
 	}
 }
 
-static void vidioc_fmt(bool try, const char *s) {
+static void vidioc_fmt(bool try, const char *s)
+{
 	static const struct token_list list[] = {
 		{ 't', TOKEN_F_ARG, "type", buf_types },
 		{ 'w', TOKEN_F_ARG, "width", NULL },
@@ -512,7 +519,8 @@ static void vidioc_fmt(bool try, const char *s) {
 	}
 }
 
-static void vidioc_reqbufs(const char *s) {
+static void vidioc_reqbufs(const char *s)
+{
 	static const struct symbol_list memory[] = {
 		{ V4L2_MEMORY_MMAP, "MMAP" },
 		{ V4L2_MEMORY_USERPTR, "USERPTR" },
