@@ -10,6 +10,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
+#include <sys/mman.h>
 
 #include "linux/videodev2.h"
 #include "linux/atomisp.h"
@@ -22,19 +23,52 @@ char *name = "v4l2n";
 #define STRINGIFY_(x)	#x
 #define STRINGIFY(x)	STRINGIFY_(x)
 
+#define MIN(a,b)	((a) <= (b) ? (a) : (b))
+#define MAX(a,b)	((a) >= (b) ? (a) : (b))
 #define CLEAR(x)	memset(&(x), 0, sizeof(x));
 #define SIZE(x)		(sizeof(x)/sizeof((x)[0]))
 #define BIT(x)		(1<<(x))
+static unsigned long int PAGE_SIZE;
+static unsigned long int PAGE_MASK;
+#define PAGE_ALIGN(x)	((typeof(x))(((unsigned long int)(x) + PAGE_SIZE - 1) & PAGE_MASK))
+
+#define MAX_RING_BUFFERS	20
+#define MAX_CAPTURE_BUFFERS	100
+#define MAX_BUFFER_SIZE		(64*1024*1024)
 
 typedef unsigned char bool;
 
+/* Holds information returned by QUERYBUF and needed
+ * for subsequent QBUF/DQBUF. Buffers are reused for long sequences. */
+struct ring_buffer {
+	struct v4l2_buffer querybuf;
+	bool queued;
+	void *malloc_p;		/* Points to address returned by malloc() */
+	void *mmap_p;		/* Points to address returned by mmap() */
+	void *start;		/* Points to beginning of data in the buffer */
+};
+
+/* Used for saving each captured frame if saving was requested */
+struct capture_buffer {
+	struct v4l2_pix_format pix_format;
+	void *image;
+	int length;		/* Length of data in the buffer in bytes */
+};
+
 static struct {
+	char *output;
 	int verbosity;
 	int fd;
+	bool save_images;
+	struct v4l2_format format;
 	struct v4l2_requestbuffers reqbufs;
+	struct ring_buffer ring_buffers[MAX_RING_BUFFERS];
+	int num_capture_buffers;
+	struct capture_buffer capture_buffers[MAX_CAPTURE_BUFFERS];
 } vars = {
 	.verbosity = 2,
 	.fd = -1,
+	.save_images = TRUE,
 	.reqbufs.count = 2,
 	.reqbufs.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
 	.reqbufs.memory = V4L2_MEMORY_USERPTR,
@@ -75,7 +109,7 @@ static const struct symbol_list controls[] = {
 
 #define V4L2_BUF_TYPE	"V4L2_BUF_TYPE_"
 #define BUFTYPE(id)	{ V4L2_BUF_TYPE_##id, (#id) }
-static const struct symbol_list buf_types[] = {
+static const struct symbol_list v4l2_buf_types[] = {
 	BUFTYPE(VIDEO_CAPTURE),
 	// BUFTYPE(VIDEO_CAPTURE_MPLANE),
 	BUFTYPE(VIDEO_OUTPUT),
@@ -172,6 +206,12 @@ static const struct symbol_list pixelformats[] = {
 	SYMBOL_END
 };
 
+static const struct symbol_list v4l2_memory[] = {
+	{ V4L2_MEMORY_MMAP, "MMAP" },
+	{ V4L2_MEMORY_USERPTR, "USERPTR" },
+	SYMBOL_END
+};
+
 static void print(int lvl, char *msg, ...)
 {
 	va_list ap;
@@ -212,12 +252,14 @@ static void xioctl_(char *ios, int ion, void *arg)
 static void usage(void)
 {
 	print(1,"Usage: %s [-h] [-d device] [--idsensor] [--idflash]\n", name);
-	print(1,"-h	Show this help\n"
+	print(1,"-h		Show this help\n"
 		"--help\n"
-		"-d	/dev/videoX device node\n"
+		"-d		/dev/videoX device node\n"
 		"--device\n"
-		"-i	Set/get input device (VIDIOC_S/G_INPUT)\n"
+		"-i		Set/get input device (VIDIOC_S/G_INPUT)\n"
 		"--input\n"
+		"-o FILENAME	Set output filename for captured images\n"
+		"--output\n"
 		"--parm		Set/get parameters (VIDIOC_S/G_PARM)\n"
 		"-t		Try format (VIDIOC_TRY_FORMAT)\n"
 		"--try_fmt\n"
@@ -225,6 +267,12 @@ static void usage(void)
 		"--fmt\n"
 		"-r		Request buffers (VIDIOC_REQBUFS)\n"
 		"--reqbufs\n"
+		"-s		VIDIOC_STREAMON: start streaming\n"
+		"--streamon\n"
+		"-e		VIDIOC_STREAMOFF: stop streaming\n"
+		"--streamoff\n"
+		"-a [N]		Capture N [1] buffers with QBUF/DQBUF\n"
+		"--capture=[N]\n"
 		"--idsensor	Get sensor identification\n"
 		"--idflash	Get flash identification\n"
 		"--ctrl-list	List supported V4L2 controls\n"
@@ -397,7 +445,7 @@ static void vidioc_parm(const char *s)
 		SYMBOL_END
 	};
 	static const struct token_list list[] = {
-		{ 't', TOKEN_F_ARG, "type", buf_types },
+		{ 't', TOKEN_F_ARG, "type", v4l2_buf_types },
 		{ 'b', TOKEN_F_ARG, "capability", capability },
 		{ 'c', TOKEN_F_ARG, "capturemode", capturemode },
 		{ 'f', TOKEN_F_ARG|TOKEN_F_ARG2, "timeperframe", NULL },
@@ -440,7 +488,7 @@ static void vidioc_parm(const char *s)
 		print(1, "VIDIOC_S_PARM\n");
 	}
 
-	print(2, ": type:          %s\n", symbol_str(p.type, buf_types));
+	print(2, ": type:          %s\n", symbol_str(p.type, v4l2_buf_types));
 	if (p.type == V4L2_BUF_TYPE_VIDEO_CAPTURE) {
 		print(2, ": capability:    %s\n", symbol_str(p.parm.capture.capability, capability));
 		print(2, ": capturemode:   %s\n", symbol_str(p.parm.capture.capturemode, capturemode));
@@ -461,7 +509,7 @@ static void vidioc_parm(const char *s)
 static void vidioc_fmt(bool try, const char *s)
 {
 	static const struct token_list list[] = {
-		{ 't', TOKEN_F_ARG, "type", buf_types },
+		{ 't', TOKEN_F_ARG, "type", v4l2_buf_types },
 		{ 'w', TOKEN_F_ARG, "width", NULL },
 		{ 'h', TOKEN_F_ARG, "height", NULL },
 		{ 'p', TOKEN_F_ARG, "pixelformat", pixelformats },
@@ -502,7 +550,7 @@ static void vidioc_fmt(bool try, const char *s)
 		print(1, "VIDIOC_S_FMT\n");
 	}
 
-	print(2, ": type:          %s\n", symbol_str(p.type, buf_types));
+	print(2, ": type:          %s\n", symbol_str(p.type, v4l2_buf_types));
 	if (p.type == V4L2_BUF_TYPE_VIDEO_CAPTURE) {
 		print(2, ": width:         %i\n", p.fmt.pix.width);
 		print(2, ": height:        %i\n", p.fmt.pix.height);
@@ -516,20 +564,16 @@ static void vidioc_fmt(bool try, const char *s)
 
 	if (!try && *s != '?') {
 		xioctl(VIDIOC_S_FMT, &p);
+		vars.format = p;
 	}
 }
 
 static void vidioc_reqbufs(const char *s)
 {
-	static const struct symbol_list memory[] = {
-		{ V4L2_MEMORY_MMAP, "MMAP" },
-		{ V4L2_MEMORY_USERPTR, "USERPTR" },
-		SYMBOL_END
-	};
 	static const struct token_list list[] = {
 		{ 'c', TOKEN_F_ARG, "count", NULL },
-		{ 't', TOKEN_F_ARG, "type", buf_types },
-		{ 'm', TOKEN_F_ARG, "memory", memory },
+		{ 't', TOKEN_F_ARG, "type", v4l2_buf_types },
+		{ 'm', TOKEN_F_ARG, "memory", v4l2_memory },
 		TOKEN_END
 	};
 	struct v4l2_requestbuffers *p = &vars.reqbufs;
@@ -545,9 +589,203 @@ static void vidioc_reqbufs(const char *s)
 
 	print(1, "VIDIOC_REQBUFS\n");
 	print(2, ": count:   %i\n", p->count);
-	print(2, ": type:    %s\n", symbol_str(p->type, buf_types));
-	print(2, ": memory:  %s\n", symbol_str(p->memory, memory));
+	print(2, ": type:    %s\n", symbol_str(p->type, v4l2_buf_types));
+	print(2, ": memory:  %s\n", symbol_str(p->memory, v4l2_memory));
 	xioctl(VIDIOC_REQBUFS, p);
+	print(2, "> count:   %i\n", p->count);
+}
+
+static void print_buffer(struct v4l2_buffer *b, char c)
+{
+	const int v = 2;
+	print(v, "%c index:     %i\n", c, b->index);
+	print(v, "%c type:      %i\n", c, symbol_str(b->type, v4l2_buf_types));
+	print(v, "%c bytesused: %i\n", c, b->bytesused);
+	print(v, "%c flags:     0x%08X\n", c, b->flags);
+	print(v, "%c field:     %i\n", c, b->field);
+	print(v, "%c timestamp: %i.%05i\n", c, b->timestamp.tv_sec, b->timestamp.tv_usec);
+	print(v, "%c timecode:  type:%i flags:0x%X %02i:%02i:%02i.%i\n", c,
+		b->timecode.type, b->timecode.flags, b->timecode.hours,
+		b->timecode.minutes, b->timecode.seconds, b->timecode.frames);
+	print(v, "%c sequence:  %i\n", c, b->sequence);
+	print(v, "%c memory:    %i\n", c, symbol_str(b->memory, v4l2_memory));
+	if (b->memory == V4L2_MEMORY_MMAP)
+	print(v, "%c offset:    0x%08X\n", c, b->m.offset);
+	else if (b->memory == V4L2_MEMORY_USERPTR)
+	print(v, "%c userptr:   0x%08X\n", c, b->m.userptr);
+	print(v, "%c length:    %i\n", c, b->length);
+	print(v, "%c input:     %i\n", c, b->input);
+}
+
+static void vidioc_querybuf_cleanup(void)
+{
+	int i;
+
+	for (i = 0; i < MAX_RING_BUFFERS; i++) {
+		struct ring_buffer *rb = &vars.ring_buffers[i];
+		free(rb->malloc_p);
+		if (rb->mmap_p) {
+			int r = munmap(rb->mmap_p, rb->querybuf.length);
+			if (r) error("munmap failed");
+		}
+		CLEAR(*rb);
+	}
+}
+
+static void vidioc_querybuf(void)
+{
+	const enum v4l2_buf_type t = vars.reqbufs.type;
+	const int bufs = vars.reqbufs.count;
+	int i;
+
+	vidioc_querybuf_cleanup();
+
+	if (t != V4L2_BUF_TYPE_VIDEO_CAPTURE)
+		error("unsupported operation type");
+
+	if (vars.reqbufs.memory != V4L2_MEMORY_MMAP &&
+	    vars.reqbufs.memory != V4L2_MEMORY_USERPTR)
+		error("unsupported memory type");
+
+	if (bufs > MAX_RING_BUFFERS)
+		error("too many ring buffers");
+
+	for (i = 0; i < bufs; i++) {
+		struct ring_buffer *rb = &vars.ring_buffers[i];
+
+		CLEAR(rb->querybuf);
+		rb->querybuf.type = t;
+		rb->querybuf.memory = vars.reqbufs.memory;
+		rb->querybuf.index = i;
+		print(1, "VIDIOC_QUERYBUF index:%i\n", rb->querybuf.index);
+		xioctl(VIDIOC_QUERYBUF, &rb->querybuf);
+		print_buffer(&rb->querybuf, '>');
+
+		if (rb->querybuf.memory == V4L2_MEMORY_MMAP) {
+			void *p = mmap(NULL, rb->querybuf.length,
+				PROT_READ | PROT_WRITE, MAP_SHARED, vars.fd, rb->querybuf.m.offset);
+			if (p == MAP_FAILED)
+				error("mmap failed");
+			rb->mmap_p = p;
+			rb->start = p;
+		} else if (rb->querybuf.memory == V4L2_MEMORY_USERPTR) {
+			void *p = malloc(PAGE_ALIGN(vars.format.fmt.pix.sizeimage) + PAGE_SIZE - 1);
+			if (p == NULL)
+				error("malloc failed");
+			rb->malloc_p = p;
+			rb->start = PAGE_ALIGN(p);
+		}
+	}
+}
+
+static void capture_buffer_save(void *image, struct v4l2_format *format, struct v4l2_buffer *buffer)
+{
+	struct capture_buffer *cb;
+
+	if (buffer->bytesused < 0 || buffer->bytesused >= MAX_BUFFER_SIZE) {
+		print(1, "Bad buffer size %i bytes. Not processing.\n", buffer->bytesused);
+		return;
+	}
+
+	if (!vars.save_images)
+		return;
+
+	if (vars.num_capture_buffers >= MAX_CAPTURE_BUFFERS) {
+		static bool printed = FALSE;
+		if (!printed) {
+			print(1, "Buffers full. Not saving the rest\n");
+			printed = TRUE;
+		}
+		return;
+	}
+
+	cb = &vars.capture_buffers[vars.num_capture_buffers++];
+	cb->pix_format = format->fmt.pix;
+	cb->length = buffer->bytesused;
+	cb->image = malloc(cb->length);
+	if (!cb->image)
+		error("out of memory");
+	memcpy(cb->image, image, cb->length);
+}
+
+static void vidioc_dqbuf(void)
+{
+	enum v4l2_buf_type t = vars.reqbufs.type;
+	enum v4l2_memory m = vars.reqbufs.memory;
+	struct v4l2_buffer b;
+	int i;
+
+	CLEAR(b);
+	b.type = t;
+	b.memory = m;
+	print(1, "VIDIOC_DQBUF\n");
+	xioctl(VIDIOC_DQBUF, &b);
+	print_buffer(&b, '<');
+	i = b.index;
+	if (i < 0 || i >= MAX_RING_BUFFERS)
+		error("index out of range");
+
+	if (b.bytesused > vars.ring_buffers[i].querybuf.length ||
+	    b.bytesused > vars.format.fmt.pix.sizeimage)
+		error("Bad buffer size %i (querybuf %i, sizeimage %i)", b.bytesused,
+			vars.ring_buffers[i].querybuf.length, vars.format.fmt.pix.sizeimage);
+
+	capture_buffer_save(vars.ring_buffers[i].start, &vars.format, &b);
+	vars.ring_buffers[i].queued = FALSE;
+}
+
+static void vidioc_qbuf(void)
+{
+	enum v4l2_buf_type t = vars.reqbufs.type;
+	enum v4l2_memory m = vars.reqbufs.memory;
+	struct v4l2_buffer b;
+	int i;
+
+	for (i = 0; i < MAX_RING_BUFFERS; i++)
+		if (!vars.ring_buffers[i].queued) break;
+	if (i >= MAX_RING_BUFFERS)
+		error("no free buffers");
+
+	CLEAR(b);
+	b.type = t;
+	b.index = i;
+	b.memory = m;
+
+	if (m == V4L2_MEMORY_USERPTR) {
+		b.m.userptr = (unsigned long)vars.ring_buffers[i].start;
+		b.length = vars.ring_buffers[i].querybuf.length;
+	} else if (m == V4L2_MEMORY_MMAP) {
+		/* Nothing here */
+	} else error("unsupported capture memory");
+
+	print(1, "VIDIOC_QBUF index:%i\n", i);
+	print_buffer(&b, '>');
+	xioctl(VIDIOC_QBUF, &b);
+	vars.ring_buffers[i].queued = TRUE;
+}
+
+static void capture(int frames)
+{
+	const int bufs = vars.reqbufs.count;
+	const int tail = MIN(bufs, frames);
+	int i;
+
+	vidioc_querybuf();
+
+	for (i = 0; i < tail; i++) {
+		vidioc_qbuf();
+	}
+
+	if (frames > tail) {
+		for (i = 0; i < frames - tail; i++) {
+			vidioc_dqbuf();
+			vidioc_qbuf();
+		}
+	}
+
+	for (i = 0; i < tail; i++) {
+		vidioc_dqbuf();
+	}
 }
 
 static __u32 get_control_id(char *name)
@@ -576,19 +814,6 @@ static __u32 get_control_id(char *name)
 	return id;
 }
 
-static const char *get_control_name(__u32 id)
-{
-	static char buf[11];
-	int i;
-
-	for (i = 0; controls[i].symbol != NULL; i++)
-		if (controls[i].id == id)
-			return controls[i].symbol;
-
-	sprintf(buf, "0x%08X", id);
-	return buf;
-}
-
 static void close_device()
 {
 	if (vars.fd == -1)
@@ -612,6 +837,19 @@ static void open_device(const char *device)
 	vars.fd = open(device, 0);
 	if (vars.fd == -1)
 		error("failed to open %s", device);
+}
+
+static const char *get_control_name(__u32 id)
+{
+	static char buf[11];
+	int i;
+
+	for (i = 0; controls[i].symbol != NULL; i++)
+		if (controls[i].id == id)
+			return controls[i].symbol;
+
+	sprintf(buf, "0x%08X", id);
+	return buf;
 }
 
 static void v4l2_s_ctrl(__u32 id, __s32 val)
@@ -662,11 +900,11 @@ static void v4l2_query_ctrl(__u32 id)
 	q.id = id;
 	xioctl(VIDIOC_QUERYCTRL, &q);
 	print(1, "VIDIOC_QUERYCTRL[%s] =\n", get_control_name(id));
-	print(2, "  type:    %i\n", q.type);
-	print(2, "  name:    %32s\n", q.name);
-	print(2, "  limits:  %i..%i / %i\n", q.minimum, q.maximum, q.step);
-	print(2, "  default: %i\n", q.default_value);
-	print(2, "  flags:   %i\n", q.flags);
+	print(2, "> type:    %i\n", q.type);
+	print(2, "> name:    %32s\n", q.name);
+	print(2, "> limits:  %i..%i / %i\n", q.minimum, q.maximum, q.step);
+	print(2, "> default: %i\n", q.default_value);
+	print(2, "> flags:   %i\n", q.flags);
 }
 
 static __s32 v4l2_g_ext_ctrl(__u32 id)
@@ -753,10 +991,14 @@ static void process_options(int argc, char *argv[])
 			{ "quiet", 0, NULL, 'q' },
 			{ "device", 1, NULL, 'd' },
 			{ "input", 1, NULL, 'i' },
+			{ "output", 1, NULL, 'o' },
 			{ "parm", 1, NULL, 'p' },
 			{ "try_fmt", 1, NULL, 't' },
 			{ "fmt", 1, NULL, 'f' },
 			{ "reqbufs", 1, NULL, 'r' },
+			{ "streamon", 0, NULL, 's' },
+			{ "streamoff", 0, NULL, 'e' },
+			{ "capture", 2, NULL, 'a' },
 			{ "idsensor", 0, NULL, 1001 },
 			{ "idflash", 0, NULL, 1002 },
 			{ "ctrl-list", 0, NULL, 1003 },
@@ -765,7 +1007,7 @@ static void process_options(int argc, char *argv[])
 			{ 0, 0, 0, 0 }
 		};
 
-		int c = getopt_long(argc, argv, "hv::qd:i:p:t:f:r:c:", long_options, NULL);
+		int c = getopt_long(argc, argv, "hv::qd:i:o:p:t:f:r:soa::c:", long_options, NULL);
 		if (c == -1)
 			break;
 
@@ -806,6 +1048,11 @@ static void process_options(int argc, char *argv[])
 			break;
 		}
 
+		case 'o':
+			vars.output = strdup(optarg);
+			if (!vars.output) error("out of memory");
+			break;
+
 		case 'p':	/* --parm, -p, VIDIOC_S/G_PARM */
 			open_device(NULL);
 			vidioc_parm(optarg);
@@ -824,6 +1071,24 @@ static void process_options(int argc, char *argv[])
 		case 'r':	/* --reqbufs, -r, VIDIOC_REQBUFS */
 			open_device(NULL);
 			vidioc_reqbufs(optarg);
+			break;
+
+		case 's': {	/* --streamon, -s, VIDIOC_STREAMON: start streaming */
+			enum v4l2_buf_type t = vars.reqbufs.type;
+			print(1, "VIDIOC_STREAMON (type=%s)\n", symbol_str(t, v4l2_buf_types));
+			xioctl(VIDIOC_STREAMON, &t);
+			break;
+		}
+
+		case 'e': {	/* --streamoff, -o, VIDIOC_STREAMOFF: stop streaming */
+			enum v4l2_buf_type t = vars.reqbufs.type;
+			print(1, "VIDIOC_STREAMOFF (type=%s)\n", symbol_str(t, v4l2_buf_types));
+			xioctl(VIDIOC_STREAMOFF, &t);
+			break;
+		}
+
+		case 'a':	/* --capture=N, -a: capture N buffers using QBUF/DQBUF */
+			capture(optarg ? atoi(optarg) : 1);
 			break;
 
 		case 1001: {	/* --idsensor */
@@ -861,11 +1126,66 @@ static void process_options(int argc, char *argv[])
 	}
 }
 
+static void capture_buffer_write(struct capture_buffer *cb, char *name, int i)
+{
+	static const char number_mark = '@';
+	FILE *f;
+	char b[256];
+	char n[5];
+	char *c;
+	int r;
+
+	if (!name || !cb->image)
+		return;
+
+	if (strlen(name)+sizeof(n) >= sizeof(b))
+		error("too long filename");
+
+	sprintf(n, "%03i", i);
+	if ((c = strrchr(name, number_mark))) {
+		int l = c - name;
+		memcpy(b, name, l);
+		strcpy(&b[l], n);
+		strcat(b, &name[l+1]);
+	} else {
+		sprintf(b, "%s_%s", name, n);
+	}
+
+	print(1, "Writing buffer #%03i (%i bytes) format %s to `%s'\n", i, cb->length,
+		symbol_str(cb->pix_format.pixelformat, pixelformats), b);
+
+	f = fopen(b, "wb");
+	if (!f) error("can not open file");
+	r = fwrite(cb->image, cb->length, 1, f);
+	if (r != 1) error("can not write file");
+	r = fclose(f);
+	if (r) error("can not close file");
+}
+
+static void cleanup(void)
+{
+	int i;
+
+	/* Save images */
+	for (i = 0; i < vars.num_capture_buffers; i++)
+		capture_buffer_write(&vars.capture_buffers[i], vars.output, i);
+
+	/* Free memory */
+	vidioc_querybuf_cleanup();
+	for (i = 0; i < vars.num_capture_buffers; i++) {
+		free(vars.capture_buffers[i].image);
+	}
+	close_device();
+	free(vars.output);
+}
+
 int main(int argc, char *argv[])
 {
 	print(1, "Starting %s\n", name);
 	name = argv[0];
+	PAGE_SIZE = getpagesize();
+	PAGE_MASK = ~(PAGE_SIZE - 1);
 	process_options(argc, argv);
-	close_device();
+	cleanup();
 	return 0;
 }
