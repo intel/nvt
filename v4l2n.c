@@ -11,11 +11,13 @@
 #include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
-
 #include "linux/videodev2.h"
-#include "linux/atomisp.h"
 
-char *name = "v4l2n";
+#define USE_ATOMISP	1
+
+#if USE_ATOMISP
+#include "linux/atomisp.h"
+#endif
 
 #define FALSE		0
 #define TRUE		(!FALSE)
@@ -37,6 +39,8 @@ static unsigned long int PAGE_MASK;
 #define MAX_BUFFER_SIZE		(64*1024*1024)
 
 typedef unsigned char bool;
+
+char *name = "v4l2n";
 
 /* Holds information returned by QUERYBUF and needed
  * for subsequent QBUF/DQBUF. Buffers are reused for long sequences. */
@@ -98,12 +102,14 @@ static const struct symbol_list controls[] = {
 	CONTROL(BRIGHTNESS),
 
 	/* Flash controls */
+#if USE_ATOMISP
 	CONTROL(FLASH_DURATION),
 	CONTROL(FLASH_INTENSITY),
 	CONTROL(TORCH_INTENSITY),
 	CONTROL(INDICATOR_INTENSITY),
 	CONTROL(FLASH_TRIGGER),
 	CONTROL(FLASH_MODE),
+#endif
 	SYMBOL_END
 };
 
@@ -273,8 +279,10 @@ static void usage(void)
 		"--streamoff\n"
 		"-a [N]		Capture N [1] buffers with QBUF/DQBUF\n"
 		"--capture=[N]\n"
-		"--idsensor	Get sensor identification\n"
-		"--idflash	Get flash identification\n"
+		"-x [EC,EF,G]	Set coarse_itg, fine_itg, and gain [ATOMISP]\n"
+		"--exposure	(ATOMISP_IOC_S_EXPOSURE)\n"
+		"--idsensor	Get sensor identification [ATOMISP]\n"
+		"--idflash	Get flash identification [ATOMISP]\n"
 		"--ctrl-list	List supported V4L2 controls\n"
 		"--ctrl=$	Request given V4L2 controls\n"
 		"--fmt-list	List supported pixel formats\n"
@@ -434,10 +442,12 @@ static void vidioc_parm(const char *s)
 {
 	static const struct symbol_list capturemode[] = {
 		{ V4L2_MODE_HIGHQUALITY, "V4L2_MODE_HIGHQUALITY" },
+#if USE_ATOMISP
 		{ CI_MODE_PREVIEW, "CI_MODE_PREVIEW" },
 		{ CI_MODE_VIDEO, "CI_MODE_VIDEO" },
 		{ CI_MODE_STILL_CAPTURE, "CI_MODE_STILL_CAPTURE" },
 		{ CI_MODE_NONE, "CI_MODE_NONE" },
+#endif
 		SYMBOL_END
 	};
 	static const struct symbol_list capability[] = {
@@ -982,6 +992,26 @@ static void request_controls(char *start)
 	} while (next);
 }
 
+#if USE_ATOMISP
+static void atomisp_ioc_s_exposure(const char *arg)
+{
+	struct atomisp_exposure exposure;
+	int val[3];
+
+	CLEAR(exposure);
+	value_get(val, SIZE(val), &arg);
+	exposure.integration_time[0] = val[0];
+	exposure.integration_time[1] = val[1];
+	exposure.gain[0] = val[2];
+
+	print(1, "ATOMISP_IOC_S_EXPOSURE integration_time={%i,%i} gain={%i}\n",
+		exposure.integration_time[0],
+		exposure.integration_time[1],
+		exposure.gain[0]);
+	xioctl(ATOMISP_IOC_S_EXPOSURE, &exposure);
+}
+#endif
+
 static void process_options(int argc, char *argv[])
 {
 	while (1) {
@@ -999,6 +1029,7 @@ static void process_options(int argc, char *argv[])
 			{ "streamon", 0, NULL, 's' },
 			{ "streamoff", 0, NULL, 'e' },
 			{ "capture", 2, NULL, 'a' },
+			{ "exposure", 1, NULL, 'x' },
 			{ "idsensor", 0, NULL, 1001 },
 			{ "idflash", 0, NULL, 1002 },
 			{ "ctrl-list", 0, NULL, 1003 },
@@ -1007,7 +1038,7 @@ static void process_options(int argc, char *argv[])
 			{ 0, 0, 0, 0 }
 		};
 
-		int c = getopt_long(argc, argv, "hv::qd:i:o:p:t:f:r:soa::c:", long_options, NULL);
+		int c = getopt_long(argc, argv, "hv::qd:i:o:p:t:f:r:soa::x:c:", long_options, NULL);
 		if (c == -1)
 			break;
 
@@ -1091,6 +1122,12 @@ static void process_options(int argc, char *argv[])
 			capture(optarg ? atoi(optarg) : 1);
 			break;
 
+#if USE_ATOMISP
+		case 'x':	/* --exposure=S, -x: ATOMISP_IOC_S_EXPOSURE */
+			open_device(NULL);
+			atomisp_ioc_s_exposure(optarg);
+			break;
+
 		case 1001: {	/* --idsensor */
 			struct atomisp_model_id id;
 			open_device(NULL);
@@ -1106,6 +1143,7 @@ static void process_options(int argc, char *argv[])
 			print(1, "ATOMISP_IOC_G_FLASH_MODEL_ID: [%s]\n", id.model);
 			break;
 		}
+#endif
 
 		case 1003:	/* --ctrl-list */
 			symbol_dump(V4L2_CID, controls);
