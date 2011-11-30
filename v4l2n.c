@@ -438,6 +438,16 @@ static const char *symbol_str(int id, const struct symbol_list list[])
 	return buffer;
 }
 
+static void streamon(bool on)
+{
+	enum v4l2_buf_type t = vars.reqbufs.type;
+	print(1, "VIDIOC_STREAM%s (type=%s)\n", on ? "ON" : "OFF", symbol_str(t, v4l2_buf_types));
+	if (on)
+		xioctl(VIDIOC_STREAMON, &t);
+	else
+		xioctl(VIDIOC_STREAMOFF, &t);
+}
+
 static void vidioc_parm(const char *s)
 {
 	static const struct symbol_list capturemode[] = {
@@ -786,6 +796,8 @@ static void capture(int frames)
 		vidioc_qbuf();
 	}
 
+	streamon(TRUE);
+
 	if (frames > tail) {
 		for (i = 0; i < frames - tail; i++) {
 			vidioc_dqbuf();
@@ -796,6 +808,8 @@ static void capture(int frames)
 	for (i = 0; i < tail; i++) {
 		vidioc_dqbuf();
 	}
+
+	streamon(FALSE);
 }
 
 static __u32 get_control_id(char *name)
@@ -1104,19 +1118,13 @@ static void process_options(int argc, char *argv[])
 			vidioc_reqbufs(optarg);
 			break;
 
-		case 's': {	/* --streamon, -s, VIDIOC_STREAMON: start streaming */
-			enum v4l2_buf_type t = vars.reqbufs.type;
-			print(1, "VIDIOC_STREAMON (type=%s)\n", symbol_str(t, v4l2_buf_types));
-			xioctl(VIDIOC_STREAMON, &t);
+		case 's':	/* --streamoff, -o, VIDIOC_STREAMOFF: stop streaming */
+			streamon(TRUE);
 			break;
-		}
 
-		case 'e': {	/* --streamoff, -o, VIDIOC_STREAMOFF: stop streaming */
-			enum v4l2_buf_type t = vars.reqbufs.type;
-			print(1, "VIDIOC_STREAMOFF (type=%s)\n", symbol_str(t, v4l2_buf_types));
-			xioctl(VIDIOC_STREAMOFF, &t);
+		case 'e':	/* --streamon, -s, VIDIOC_STREAMON: start streaming */
+			streamon(FALSE);
 			break;
-		}
 
 		case 'a':	/* --capture=N, -a: capture N buffers using QBUF/DQBUF */
 			capture(optarg ? atoi(optarg) : 1);
