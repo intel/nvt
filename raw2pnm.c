@@ -9,13 +9,7 @@
 
 char *name = "raw2pnm";
 
-static struct {
-	char *output;
-	int verbosity;
-	struct v4l2_format format;
-} vars = {
-	.verbosity = 2,
-};
+static int verbosity = 2;
 
 struct symbol_list {
 	int id;
@@ -109,7 +103,7 @@ static void print(int lvl, char *msg, ...)
 {
 	va_list ap;
 
-	if (vars.verbosity < lvl)
+	if (verbosity < lvl)
 		return;
 
 	va_start(ap, msg);
