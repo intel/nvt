@@ -11,6 +11,7 @@
 #include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
+#include <time.h>
 #include "linux/videodev2.h"
 
 #define USE_ATOMISP	1
@@ -40,7 +41,7 @@ static unsigned long int PAGE_MASK;
 
 typedef unsigned char bool;
 
-char *name = "v4l2n";
+static char *name = "v4l2n";
 
 /* Holds information returned by QUERYBUF and needed
  * for subsequent QBUF/DQBUF. Buffers are reused for long sequences. */
@@ -287,6 +288,8 @@ static void usage(void)
 		"--ctrl=$	Request given V4L2 controls\n"
 		"--fmt-list	List supported pixel formats\n"
 		"-c $	(VIDIOC_QUERYCAP / VIDIOC_S/G_CTRL / VIDIOC_S/G_EXT_CTRLS)\n"
+		"-w [x]		Wait of x seconds (may be fractional)\n"
+		"--wait\n"
 		"\n"
 		"List of V4L2 controls syntax: <[V4L2_CID_]control_name_or_id>[+][=value|?|#][,...]\n"
 		"where control_name_or_id is either symbolic name or numerical id.\n"
@@ -1026,6 +1029,25 @@ static void atomisp_ioc_s_exposure(const char *arg)
 }
 #endif
 
+static void delay(double t)
+{
+	struct timespec ts;
+	int r;
+
+	if (t > 0.0) {
+		ts.tv_sec = (long)t;
+		ts.tv_nsec = (long)((t - ts.tv_sec) * 1000000000.0 + 0.5);
+	} else {
+		/* Zero means some small delay, here 1/100 second */
+		ts.tv_sec = 0;
+		ts.tv_nsec = 10*1000*1000;
+	}
+	print(1, "SLEEP %li.%08li s\n", (long)ts.tv_sec, ts.tv_nsec);
+	r = nanosleep(&ts, NULL);
+	if (r != 0)
+		error("nanosleep failed");
+}
+
 static void process_options(int argc, char *argv[])
 {
 	while (1) {
@@ -1049,10 +1071,11 @@ static void process_options(int argc, char *argv[])
 			{ "ctrl-list", 0, NULL, 1003 },
 			{ "fmt-list", 0, NULL, 1004 },
 			{ "ctrl", 1, NULL, 'c' },
+			{ "wait", 2, NULL, 'w' },
 			{ 0, 0, 0, 0 }
 		};
 
-		int c = getopt_long(argc, argv, "hv::qd:i:o:p:t:f:r:soa::x:c:", long_options, NULL);
+		int c = getopt_long(argc, argv, "hv::qd:i:o:p:t:f:r:soa::x:c:w::", long_options, NULL);
 		if (c == -1)
 			break;
 
@@ -1164,6 +1187,10 @@ static void process_options(int argc, char *argv[])
 		case 'c':	/* --ctrl, -c, VIDIOC_QUERYCAP / VIDIOC_S/G_CTRL / VIDIOC_S/G_EXT_CTRLS */
 			open_device(NULL);
 			request_controls(optarg);
+			break;
+
+		case 'w':	/* -w, --wait */
+			delay(optarg ? atof(optarg) : 0.0);
 			break;
 
 		default:
