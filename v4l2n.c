@@ -441,6 +441,36 @@ static const char *symbol_str(int id, const struct symbol_list list[])
 	return buffer;
 }
 
+static const char *symbol_flag_str(int id, const struct symbol_list list[])
+{
+	const int MARGIN = 32;
+	static char buffer[512];
+	int len = 0;
+	int i;
+
+	for (i=0; list[i].symbol; i++) {
+		if ((id & list[i].id) == list[i].id) {
+			if (len == 0) {
+				strcpy(buffer, list[i].symbol);
+			} else {
+				strcat(buffer, " ");
+				strcat(buffer, list[i].symbol);
+				len++;
+			}
+			len += strlen(list[i].symbol);
+			if (len > sizeof(buffer)-MARGIN)
+				error("buffer outrun while printing flags");
+		}
+	}
+
+	if (len == 0) {
+		len += sprintf(buffer, "0x%08X", id);
+	} else {
+		len += sprintf(&buffer[len], " [0x%08X]", id);
+	}
+	return buffer;
+}
+
 static void streamon(bool on)
 {
 	enum v4l2_buf_type t = vars.reqbufs.type;
@@ -620,11 +650,30 @@ static void vidioc_reqbufs(const char *s)
 
 static void print_buffer(struct v4l2_buffer *b, char c)
 {
+#define V4L2_BUF_FLAG	"V4L2_BUF_FLAG_"
+#define BUF_FLAG(id)	{ V4L2_BUF_FLAG_##id, (#id) }
+
+	static const struct symbol_list buf_flags[] = {
+		BUF_FLAG(MAPPED),
+		BUF_FLAG(QUEUED),
+		BUF_FLAG(DONE),
+		BUF_FLAG(ERROR),
+		BUF_FLAG(KEYFRAME),
+		BUF_FLAG(PFRAME),
+		BUF_FLAG(BFRAME),
+		BUF_FLAG(TIMECODE),
+		BUF_FLAG(INPUT),
+		// BUF_FLAG(PREPARED),
+		// BUF_FLAG(NO_CACHE_INVALIDATE),
+		// BUF_FLAG(NO_CACHE_CLEAN),
+		SYMBOL_END
+	};
+
 	const int v = 2;
 	print(v, "%c index:     %i\n", c, b->index);
 	print(v, "%c type:      %i\n", c, symbol_str(b->type, v4l2_buf_types));
 	print(v, "%c bytesused: %i\n", c, b->bytesused);
-	print(v, "%c flags:     0x%08X\n", c, b->flags);
+	print(v, "%c flags:     %s\n", c, symbol_flag_str(b->flags, buf_flags));
 	print(v, "%c field:     %i\n", c, b->field);
 	print(v, "%c timestamp: %i.%05i\n", c, b->timestamp.tv_sec, b->timestamp.tv_usec);
 	print(v, "%c timecode:  type:%i flags:0x%X %02i:%02i:%02i.%i\n", c,
