@@ -7,6 +7,9 @@
 #include <unistd.h>
 #include "linux/videodev2.h"
 
+#define MIN(a,b)	((a) <= (b) ? (a) : (b))
+#define MAX(a,b)	((a) >= (b) ? (a) : (b))
+
 char *name = "raw2pnm";
 
 static int verbosity = 2;
@@ -215,6 +218,18 @@ static long fsize(FILE *f)
 	return r == 0 ? s : r;
 }
 
+static void *duplicate_buffer(void *buffer, int size, int new_size)
+{
+	void *b = calloc(1, new_size);
+	if (!b)
+		error("out of memory, can not allocate %i bytes", new_size);
+	memcpy(b, buffer, MIN(size, new_size));
+	if (new_size > size)
+		print(1, "warning: input buffer too small by %i bytes, setting the rest to zero\n",
+			new_size - size);
+	return b;
+}
+
 /* Return 24 bits-per-pixel RGB image */
 static int convert(void *in_buffer, int in_size, int width, int height, int stride, __u32 format, void *out_buffer)
 {
@@ -223,13 +238,15 @@ static int convert(void *in_buffer, int in_size, int width, int height, int stri
 	const int B = 2;
 	const int dbpp = 3;
 	int y, x;
-	unsigned char *s = in_buffer;
+	unsigned char *src = NULL;
+	unsigned char *s;
 	unsigned char *d = out_buffer;
 	unsigned int dstride = width * dbpp;
 
 	switch (format) {
 	case V4L2_PIX_FMT_NV12:
 		if (stride <= 0) stride = width;
+		s = src = duplicate_buffer(in_buffer, in_size, stride * height*3/2);
 		for (y = 0; y < height; y++) {
 			unsigned char *s1 = s;
 			unsigned char *d1 = d;
@@ -250,6 +267,7 @@ static int convert(void *in_buffer, int in_size, int width, int height, int stri
 		return -1;
 	}
 
+	free(src);
 	return 0;
 }
 
@@ -268,7 +286,6 @@ int main(int argc, char *argv[])
 	int height = -1;
 	int stride = -1;
 	__u32 format = 0;
-
 
 	while ((opt = getopt(argc, argv, "hf:x:y:s:")) != -1) {
 		switch (opt) {
