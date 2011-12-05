@@ -9,6 +9,8 @@
 
 #define MIN(a,b)	((a) <= (b) ? (a) : (b))
 #define MAX(a,b)	((a) >= (b) ? (a) : (b))
+#define CLAMP(a,lo,hi)	((a) < (lo) ? (lo) : (a) > (hi) ? (hi) : (a))
+#define CLAMPB(a)	CLAMP(a, 0, 255)
 
 char *name = "raw2pnm";
 
@@ -230,16 +232,37 @@ static void *duplicate_buffer(void *buffer, int size, int new_size)
 	return b;
 }
 
+static void inline yuv_to_rgb(unsigned char rgb[3], int y, int cb, int cr)
+{
+	static const int R = 0;
+	static const int G = 1;
+	static const int B = 2;
+	int u = cb;
+	int v = cr;
+#if 0
+	/* http://www.fourcc.org/fccyvrgb.php */
+	rgb[B] = CLAMPB(1.164*(y - 16)                   + 2.018*(u - 128));
+	rgb[G] = CLAMPB(1.164*(y - 16) - 0.813*(v - 128) - 0.391*(u - 128));
+	rgb[R] = CLAMPB(1.164*(y - 16) + 1.596*(v - 128));
+#else
+	/* http://en.wikipedia.org/wiki/YUV
+	 * conversion from Y'UV to RGB (NTSC version): */
+	int c = y - 16;
+	int d = u - 128;
+	int e = v - 128;
+	rgb[R] = CLAMPB((298*c + 409*e + 128) >> 8);
+	rgb[G] = CLAMPB((298*c - 100*d - 208*e + 128) >> 8);
+	rgb[B] = CLAMPB((298*c + 516*d + 128) >> 8);
+#endif
+}
+
 /* Return 24 bits-per-pixel RGB image */
 static int convert(void *in_buffer, int in_size, int width, int height, int stride, __u32 format, void *out_buffer)
 {
-	const int R = 0;
-	const int G = 1;
-	const int B = 2;
-	const int dbpp = 3;
+	static const int dbpp = 3;
 	int y, x;
 	unsigned char *src = NULL;
-	unsigned char *s;
+	unsigned char *s, *u;
 	unsigned char *d = out_buffer;
 	unsigned int dstride = width * dbpp;
 
@@ -247,17 +270,24 @@ static int convert(void *in_buffer, int in_size, int width, int height, int stri
 	case V4L2_PIX_FMT_NV12:
 		if (stride <= 0) stride = width;
 		s = src = duplicate_buffer(in_buffer, in_size, stride * height*3/2);
+		u = &s[height * stride];
 		for (y = 0; y < height; y++) {
 			unsigned char *s1 = s;
+			unsigned char *u1 = u;
 			unsigned char *d1 = d;
 			for (x = 0; x < width; x++) {
-				d1[R] = *s1;
-				d1[G] = *s1;
-				d1[B] = *s1;
+				int b = *s1;
+				int cb = u1[0];
+				int cr = u1[1];
+				yuv_to_rgb(d1, b, cb, cr);
 				s1 += 1;
 				d1 += dbpp;
+				if (x & 1)
+					u1 += 2;
 			}
 			s += stride;
+			if (y & 1)
+				u += stride;
 			d += dstride;
 		}
 		break;
