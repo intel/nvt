@@ -671,7 +671,7 @@ static void print_buffer(struct v4l2_buffer *b, char c)
 
 	const int v = 2;
 	print(v, "%c index:     %i\n", c, b->index);
-	print(v, "%c type:      %i\n", c, symbol_str(b->type, v4l2_buf_types));
+	print(v, "%c type:      %s\n", c, symbol_str(b->type, v4l2_buf_types));
 	print(v, "%c bytesused: %i\n", c, b->bytesused);
 	print(v, "%c flags:     %s\n", c, symbol_flag_str(b->flags, buf_flags));
 	print(v, "%c field:     %i\n", c, b->field);
@@ -680,7 +680,7 @@ static void print_buffer(struct v4l2_buffer *b, char c)
 		b->timecode.type, b->timecode.flags, b->timecode.hours,
 		b->timecode.minutes, b->timecode.seconds, b->timecode.frames);
 	print(v, "%c sequence:  %i\n", c, b->sequence);
-	print(v, "%c memory:    %i\n", c, symbol_str(b->memory, v4l2_memory));
+	print(v, "%c memory:    %s\n", c, symbol_str(b->memory, v4l2_memory));
 	if (b->memory == V4L2_MEMORY_MMAP)
 	print(v, "%c offset:    0x%08X\n", c, b->m.offset);
 	else if (b->memory == V4L2_MEMORY_USERPTR)
@@ -792,7 +792,7 @@ static void vidioc_dqbuf(void)
 	b.memory = m;
 	print(1, "VIDIOC_DQBUF\n");
 	xioctl(VIDIOC_DQBUF, &b);
-	print_buffer(&b, '<');
+	print_buffer(&b, '>');
 	i = b.index;
 	if (i < 0 || i >= MAX_RING_BUFFERS)
 		error("index out of range");
