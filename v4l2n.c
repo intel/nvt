@@ -12,6 +12,7 @@
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <time.h>
+#include <limits.h>
 #include "linux/videodev2.h"
 
 #define USE_ATOMISP	1
@@ -256,6 +257,18 @@ static void xioctl_(char *ios, int ion, void *arg)
 		error("%s failed", ios);
 }
 
+static int xioctl_try(int ion, void *arg)
+{
+	int r = ioctl(vars.fd, ion, arg);
+	if (r != 0) {
+		int e = -errno;
+		if (e == 0)
+			return INT_MIN;
+		return e;
+	}
+	return 0;
+}
+
 static void usage(void)
 {
 	print(1,"Usage: %s [-h] [-d device] [--idsensor] [--idflash]\n", name);
@@ -265,6 +278,7 @@ static void usage(void)
 		"--device\n"
 		"-i		Set/get input device (VIDIOC_S/G_INPUT)\n"
 		"--input\n"
+		"--enuminput	Enumerate available input devices (VIDIOC_ENUMINPUT)\n"
 		"-o FILENAME	Set output filename for captured images\n"
 		"--output\n"
 		"--parm		Set/get parameters (VIDIOC_S/G_PARM)\n"
@@ -469,6 +483,37 @@ static const char *symbol_flag_str(int id, const struct symbol_list list[])
 		len += sprintf(&buffer[len], " [0x%08X]", id);
 	}
 	return buffer;
+}
+
+static void vidioc_enuminput(void)
+{
+	static const struct symbol_list type[] = {
+		{ V4L2_INPUT_TYPE_TUNER, "V4L2_INPUT_TYPE_TUNER" },
+		{ V4L2_INPUT_TYPE_CAMERA, "V4L2_INPUT_TYPE_CAMERA" },
+		SYMBOL_END
+	};
+
+	struct v4l2_input p;
+	int r, i = 0;
+
+	do {
+		CLEAR(p);
+		p.index = i++;
+		print(1, "VIDIOC_ENUMINPUT (index=%i)\n", p.index);
+		r = xioctl_try(VIDIOC_ENUMINPUT, &p);
+		if (r == 0) {
+			print(2, "> index:        %i\n", p.index);
+			print(2, "> name:         %-32s\n", p.name);
+			print(2, "> type:         %s\n", symbol_str(p.type, type));
+			print(2, "> audioset:     %i\n", p.audioset);
+			print(2, "> tuner:        %i\n", p.tuner);
+			print(2, "> std:          %li\n", p.std);
+			print(2, "> status:       0x%08X\n", p.status);
+			print(2, "> capabilities: 0x%08X\n", p.capabilities);
+		}
+	} while (r == 0);
+	if (r != -EINVAL)
+		error("VIDIOC_ENUMINPUT failed");
 }
 
 static void streamon(bool on)
@@ -1106,6 +1151,7 @@ static void process_options(int argc, char *argv[])
 			{ "quiet", 0, NULL, 'q' },
 			{ "device", 1, NULL, 'd' },
 			{ "input", 1, NULL, 'i' },
+			{ "enuminput", 0, NULL, 1005 },
 			{ "output", 1, NULL, 'o' },
 			{ "parm", 1, NULL, 'p' },
 			{ "try_fmt", 1, NULL, 't' },
@@ -1164,6 +1210,11 @@ static void process_options(int argc, char *argv[])
 			}
 			break;
 		}
+
+		case 1005:	/* --enuminput */
+			open_device(NULL);
+			vidioc_enuminput();
+			break;
 
 		case 'o':
 			vars.output = strdup(optarg);
