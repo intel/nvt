@@ -29,8 +29,9 @@ if [ "$P" = "-a" ]; then
 fi
 
 adb shell 'mount -o remount -w /dev/block/mmcblk0p6 /system'
-adb shell rm -f "$DIR/testimage_*.raw"
+adb shell rm "$DIR/testimage_*.raw"
 adb push v4l2n /system/ && \
+adb shell "/system/v4l2n --enuminput" && \
 echo "/system/v4l2n $P" && \
 adb shell "/system/v4l2n $P"
 
