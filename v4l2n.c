@@ -252,9 +252,10 @@ static void error(char *msg, ...)
 
 static void xioctl_(char *ios, int ion, void *arg)
 {
-	int r = ioctl(vars.fd, ion, arg);
+	int fd = vars.fd;
+	int r = ioctl(fd, ion, arg);
 	if (r)
-		error("%s failed", ios);
+		error("%s failed on fd %i", ios, fd);
 }
 
 static int xioctl_try(int ion, void *arg)
