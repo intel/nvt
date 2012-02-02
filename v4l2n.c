@@ -1159,6 +1159,11 @@ static void v4l2_s_ext_ctrl(__u32 id, __s32 val)
 	c.value = val;
 
 	print(1, "VIDIOC_S_EXT_CTRLS[%s] = %i\n", get_control_name(id), c.value);
+	print(2, "< ctrl_class: 0x%08X\n", cs.ctrl_class);
+	print(2, "< count:      %i\n", cs.count);
+	print(2, "< controls:   %p\n", cs.controls);
+	print(2, "<< id:        0x%08X\n", c.id);
+	print(2, "<< value:     %i\n", c.value);
 	xioctl(VIDIOC_S_EXT_CTRLS, &cs);
 }
 
