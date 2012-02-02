@@ -1079,6 +1079,7 @@ static __u32 get_control_id(char *name)
 		}
 		if (controls[i].symbol == NULL)
 			error("unknown control");
+		id = controls[i].id;
 	}
 
 	return id;
