@@ -425,6 +425,7 @@ static void usage(void)
 		"--help\n"
 		"-d		/dev/videoX device node\n"
 		"--device\n"
+		"--querycap	Query device capabilities (VIDIOC_QUERYCAP)\n"
 		"-i		Set/get input device (VIDIOC_S/G_INPUT)\n"
 		"--input\n"
 		"--enuminput	Enumerate available input devices (VIDIOC_ENUMINPUT)\n"
@@ -650,7 +651,7 @@ static void vidioc_enuminput(void)
 		r = xioctl_try(VIDIOC_ENUMINPUT, &p);
 		if (r == 0) {
 			print(2, "> index:        %i\n", p.index);
-			print(2, "> name:         %-32s\n", p.name);
+			print(2, "> name:         %.32s\n", p.name);
 			print(2, "> type:         %s\n", symbol_str(p.type, type));
 			print(2, "> audioset:     %i\n", p.audioset);
 			print(2, "> tuner:        %i\n", p.tuner);
@@ -1108,6 +1109,19 @@ static void open_device(const char *device)
 		error("failed to open %s", device);
 }
 
+static void vidioc_querycap()
+{
+	struct v4l2_capability c;
+
+	CLEAR(c);
+	xioctl(VIDIOC_QUERYCAP, &c);
+	print(1, "VIDIOC_QUERYCAP\n");
+	print(2, "> driver:       `%.16s'\n", c.driver);
+	print(2, "> card:         `%.32s'\n", c.card);
+	print(2, "> bus_info:     `%.32s'\n", c.bus_info);
+	print(2, "> version:      %i.%u.%u\n", c.version >> 16, (c.version >> 8) & 0xFF, c.version & 0xFF);
+}
+
 static const char *get_control_name(__u32 id)
 {
 	static char buf[11];
@@ -1175,7 +1189,7 @@ static void v4l2_query_ctrl(__u32 id)
 	xioctl(VIDIOC_QUERYCTRL, &q);
 	print(1, "VIDIOC_QUERYCTRL[%s] =\n", get_control_name(id));
 	print(2, "> type:    %i\n", q.type);
-	print(2, "> name:    %32s\n", q.name);
+	print(2, "> name:    %.32s\n", q.name);
 	print(2, "> limits:  %i..%i / %i\n", q.minimum, q.maximum, q.step);
 	print(2, "> default: %i\n", q.default_value);
 	print(2, "> flags:   %i\n", q.flags);
@@ -1303,6 +1317,7 @@ static void process_options(int argc, char *argv[])
 			{ "verbose", 2, NULL, 'v' },
 			{ "quiet", 0, NULL, 'q' },
 			{ "device", 1, NULL, 'd' },
+			{ "querycap", 0, NULL, 1001 },
 			{ "input", 1, NULL, 'i' },
 			{ "enuminput", 0, NULL, 1005 },
 			{ "output", 1, NULL, 'o' },
@@ -1344,6 +1359,11 @@ static void process_options(int argc, char *argv[])
 
 		case 'd':	/* --device, -d */
 			open_device(optarg);
+			break;
+
+		case 1001:	/* --querycap */
+			open_device(NULL);
+			vidioc_querycap();
 			break;
 
 		case 'i': {	/* --input, -i, VIDIOC_S/G_INPUT */
