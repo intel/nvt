@@ -420,7 +420,7 @@ static int xioctl_try(int ion, void *arg)
 
 static void usage(void)
 {
-	print(1,"Usage: %s [-h] [-d device] [--idsensor] [--idflash]\n", name);
+	print(1,"Usage: %s [-h] [-d device]\n", name);
 	print(1,"-h		Show this help\n"
 		"--help\n"
 		"-d		/dev/videoX device node\n"
@@ -445,12 +445,10 @@ static void usage(void)
 		"--capture=[N]\n"
 		"-x [EC,EF,G]	Set coarse_itg, fine_itg, and gain [ATOMISP]\n"
 		"--exposure	(ATOMISP_IOC_S_EXPOSURE)\n"
-		"--idsensor	Get sensor identification [ATOMISP]\n"
-		"--idflash	Get flash identification [ATOMISP]\n"
 		"--ctrl-list	List supported V4L2 controls\n"
 		"--ctrl=$	Request given V4L2 controls\n"
 		"--fmt-list	List supported pixel formats\n"
-		"-c $	(VIDIOC_QUERYCAP / VIDIOC_S/G_CTRL / VIDIOC_S/G_EXT_CTRLS)\n"
+		"-c $	(VIDIOC_QUERYCTRL / VIDIOC_S/G_CTRL / VIDIOC_S/G_EXT_CTRLS)\n"
 		"-w [x]		Wait of x seconds (may be fractional)\n"
 		"--wait\n"
 		"\n"
@@ -1316,8 +1314,6 @@ static void process_options(int argc, char *argv[])
 			{ "streamoff", 0, NULL, 'e' },
 			{ "capture", 2, NULL, 'a' },
 			{ "exposure", 1, NULL, 'x' },
-			{ "idsensor", 0, NULL, 1001 },
-			{ "idflash", 0, NULL, 1002 },
 			{ "ctrl-list", 0, NULL, 1003 },
 			{ "fmt-list", 0, NULL, 1004 },
 			{ "ctrl", 1, NULL, 'c' },
@@ -1423,7 +1419,7 @@ static void process_options(int argc, char *argv[])
 			symbol_dump(V4L2_PIX_FMT, pixelformats);
 			return;
 
-		case 'c':	/* --ctrl, -c, VIDIOC_QUERYCAP / VIDIOC_S/G_CTRL / VIDIOC_S/G_EXT_CTRLS */
+		case 'c':	/* --ctrl, -c, VIDIOC_QUERYCTRL / VIDIOC_S/G_CTRL / VIDIOC_S/G_EXT_CTRLS */
 			open_device(NULL);
 			request_controls(optarg);
 			break;
