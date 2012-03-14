@@ -22,7 +22,7 @@ if [ "$P" = "-a" ]; then
 	P=""
 	P="$P --input $V4L2N_INPUT"
 	P="$P --parm type=1"
-	P="$P --fmt type=1,width=$V4L2N_WIDTH,height=$V4L2N_HEIGHT,pixelformat=$V4L2N_FORMAT"
+	P="$P --fmt type=1,width=$V4L2N_WIDTH,height=$V4L2N_HEIGHT,pixelformat=$V4L2N_FORMAT --fmt '?'"
 	P="$P --reqbufs count=2,memory=USERPTR"
 	P="$P --capture=2"
 	P="$P -o $V4L2N_DIR/testimage_@.raw"
