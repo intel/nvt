@@ -651,7 +651,7 @@ static void vidioc_enuminput(void)
 		r = xioctl_try(VIDIOC_ENUMINPUT, &p);
 		if (r == 0) {
 			print(2, "> index:        %i\n", p.index);
-			print(2, "> name:         %.32s\n", p.name);
+			print(2, "> name:         `%.32s'\n", p.name);
 			print(2, "> type:         %s\n", symbol_str(p.type, type));
 			print(2, "> audioset:     %i\n", p.audioset);
 			print(2, "> tuner:        %i\n", p.tuner);
@@ -1106,7 +1106,7 @@ static void open_device(const char *device)
 	print(1, "OPEN video device `%s'\n", device);
 	vars.fd = open(device, 0);
 	if (vars.fd == -1)
-		error("failed to open %s", device);
+		error("failed to open `%s'", device);
 }
 
 static void vidioc_querycap()
@@ -1189,7 +1189,7 @@ static void v4l2_query_ctrl(__u32 id)
 	xioctl(VIDIOC_QUERYCTRL, &q);
 	print(1, "VIDIOC_QUERYCTRL[%s] =\n", get_control_name(id));
 	print(2, "> type:    %i\n", q.type);
-	print(2, "> name:    %.32s\n", q.name);
+	print(2, "> name:    `%.32s'\n", q.name);
 	print(2, "> limits:  %i..%i / %i\n", q.minimum, q.maximum, q.step);
 	print(2, "> default: %i\n", q.default_value);
 	print(2, "> flags:   %i\n", q.flags);
