@@ -71,6 +71,7 @@ static struct {
 	struct ring_buffer ring_buffers[MAX_RING_BUFFERS];
 	int num_capture_buffers;
 	struct capture_buffer capture_buffers[MAX_CAPTURE_BUFFERS];
+	bool streaming;
 } vars = {
 	.verbosity = 2,
 	.fd = -1,
@@ -444,6 +445,7 @@ static void usage(void)
 		"--streamoff\n"
 		"-a [N]		Capture N [1] buffers with QBUF/DQBUF\n"
 		"--capture=[N]\n"
+		"--stream=[N]	Capture N [1] buffers with QBUF/DQBUF and leave streaming on\n"
 		"-x [EC,EF,G]	Set coarse_itg, fine_itg, and gain [ATOMISP]\n"
 		"--exposure	(ATOMISP_IOC_S_EXPOSURE)\n"
 		"--ctrl-list	List supported V4L2 controls\n"
@@ -668,10 +670,13 @@ static void streamon(bool on)
 {
 	enum v4l2_buf_type t = vars.reqbufs.type;
 	print(1, "VIDIOC_STREAM%s (type=%s)\n", on ? "ON" : "OFF", symbol_str(t, v4l2_buf_types));
+	if (vars.streaming == on)
+		print(0, "warning: streaming is already in this state\n");
 	if (on)
 		xioctl(VIDIOC_STREAMON, &t);
 	else
 		xioctl(VIDIOC_STREAMOFF, &t);
+	vars.streaming = on;
 }
 
 static void vidioc_parm(const char *s)
@@ -1029,6 +1034,12 @@ static void vidioc_qbuf(void)
 	vars.ring_buffers[i].queued = TRUE;
 }
 
+/* - Initialize capture,
+ * - start streaming,
+ * - capture (queue and dequeue) given number of frames,
+ * - and disable streaming.
+ * This keeps always queue as full as possible.
+ */
 static void capture(int frames)
 {
 	const int bufs = vars.reqbufs.count;
@@ -1055,6 +1066,33 @@ static void capture(int frames)
 	}
 
 	streamon(FALSE);
+}
+
+/* - Initialize capture unless it already has been done,
+ * - Start streaming unless it already has been done,
+ * - Capture (queue and dequeue) given number of frames,
+ * This is more time-critical than capture() because it
+ * keeps one frame in the queue at maximum. It allows
+ * precisely mixing control settings with capture.
+ */
+static void stream(int frames)
+{
+	bool first = FALSE;
+	int i;
+
+	if (frames > 0 && !vars.streaming) {
+		first = TRUE;
+		vidioc_querybuf();
+		vidioc_qbuf();
+		streamon(TRUE);
+	}
+
+	for (i = 0; i < frames; i++) {
+		if (!first)
+			vidioc_qbuf();
+		vidioc_dqbuf();
+		first = FALSE;
+	}
 }
 
 static __u32 get_control_id(char *name)
@@ -1328,6 +1366,7 @@ static void process_options(int argc, char *argv[])
 			{ "streamon", 0, NULL, 's' },
 			{ "streamoff", 0, NULL, 'e' },
 			{ "capture", 2, NULL, 'a' },
+			{ "stream", 2, NULL, 1006 },
 			{ "exposure", 1, NULL, 'x' },
 			{ "ctrl-list", 0, NULL, 1003 },
 			{ "fmt-list", 0, NULL, 1004 },
@@ -1422,6 +1461,10 @@ static void process_options(int argc, char *argv[])
 
 		case 'a':	/* --capture=N, -a: capture N buffers using QBUF/DQBUF */
 			capture(optarg ? atoi(optarg) : 1);
+			break;
+
+		case 1006:	/* --stream=N: capture N buffers and leave streaming on */
+			stream(optarg ? atoi(optarg) : 1);
 			break;
 
 #if USE_ATOMISP
