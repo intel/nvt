@@ -11,6 +11,7 @@
 #include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
+#include <sys/time.h>
 #include <time.h>
 #include <limits.h>
 #include "linux/videodev2.h"
@@ -72,6 +73,7 @@ static struct {
 	int num_capture_buffers;
 	struct capture_buffer capture_buffers[MAX_CAPTURE_BUFFERS];
 	bool streaming;
+	struct timeval start_time;
 } vars = {
 	.verbosity = 2,
 	.fd = -1,
@@ -635,6 +637,20 @@ static const char *symbol_flag_str(int id, const struct symbol_list list[])
 	return buffer;
 }
 
+static void print_time(void)
+{
+	struct timeval tv;
+
+	if (gettimeofday(&tv, NULL) < 0) error("gettimeofday failed");
+	tv.tv_sec -= vars.start_time.tv_sec;
+	tv.tv_usec -= vars.start_time.tv_usec;
+	while (tv.tv_usec < 0) {
+		tv.tv_usec += 1000000;
+		tv.tv_sec -= 1;
+	}
+	print(1, "[%3i.%06i]\n", tv.tv_sec, tv.tv_usec);
+}
+
 static void vidioc_enuminput(void)
 {
 	static const struct symbol_list type[] = {
@@ -873,7 +889,7 @@ static void print_buffer(struct v4l2_buffer *b, char c)
 	print(v, "%c bytesused: %i\n", c, b->bytesused);
 	print(v, "%c flags:     %s\n", c, symbol_flag_str(b->flags, buf_flags));
 	print(v, "%c field:     %i\n", c, b->field);
-	print(v, "%c timestamp: %i.%05i\n", c, b->timestamp.tv_sec, b->timestamp.tv_usec);
+	print(v, "%c timestamp: %i.%06i\n", c, b->timestamp.tv_sec, b->timestamp.tv_usec);
 	print(v, "%c timecode:  type:%i flags:0x%X %02i:%02i:%02i.%i\n", c,
 		b->timecode.type, b->timecode.flags, b->timecode.hours,
 		b->timecode.minutes, b->timecode.seconds, b->timecode.frames);
@@ -988,8 +1004,9 @@ static void vidioc_dqbuf(void)
 	CLEAR(b);
 	b.type = t;
 	b.memory = m;
-	print(1, "VIDIOC_DQBUF\n");
+	print(1, "VIDIOC_DQBUF ");
 	xioctl(VIDIOC_DQBUF, &b);
+	print_time();
 	print_buffer(&b, '>');
 	i = b.index;
 	if (i < 0 || i >= MAX_RING_BUFFERS)
@@ -1556,6 +1573,7 @@ int main(int argc, char *argv[])
 	name = argv[0];
 	PAGE_SIZE = getpagesize();
 	PAGE_MASK = ~(PAGE_SIZE - 1);
+	if (gettimeofday(&vars.start_time, NULL) < 0) error("getting start time failed");
 	process_options(argc, argv);
 	cleanup();
 	return 0;
