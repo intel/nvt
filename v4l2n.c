@@ -456,6 +456,7 @@ static void usage(void)
 		"-c $	(VIDIOC_QUERYCTRL / VIDIOC_S/G_CTRL / VIDIOC_S/G_EXT_CTRLS)\n"
 		"-w [x]		Wait of x seconds (may be fractional)\n"
 		"--wait\n"
+		"--shell=CMD	Run shell command CMD\n"
 		"\n"
 		"List of V4L2 controls syntax: <[V4L2_CID_]control_name_or_id>[+][=value|?|#][,...]\n"
 		"where control_name_or_id is either symbolic name or numerical id.\n"
@@ -1364,6 +1365,16 @@ static void delay(double t)
 		error("nanosleep failed");
 }
 
+static void shell(const char *cmd)
+{
+	int r;
+
+	print(1, "Executing `%s'\n", cmd);
+	r = system(cmd);
+	if (r)
+		print(1, "status: %i\n", r);
+}
+
 static void process_options(int argc, char *argv[])
 {
 	while (1) {
@@ -1389,6 +1400,7 @@ static void process_options(int argc, char *argv[])
 			{ "fmt-list", 0, NULL, 1004 },
 			{ "ctrl", 1, NULL, 'c' },
 			{ "wait", 2, NULL, 'w' },
+			{ "shell", 1, NULL, 1007 },
 			{ 0, 0, 0, 0 }
 		};
 
@@ -1506,6 +1518,10 @@ static void process_options(int argc, char *argv[])
 
 		case 'w':	/* -w, --wait */
 			delay(optarg ? atof(optarg) : 0.0);
+			break;
+
+		case 1007:	/* --shell */
+			shell(optarg);
 			break;
 
 		default:
