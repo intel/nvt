@@ -14,6 +14,7 @@
 #include <sys/time.h>
 #include <time.h>
 #include <limits.h>
+#include <sys/wait.h>
 #include "linux/videodev2.h"
 
 #define USE_ATOMISP	1
@@ -1365,14 +1366,26 @@ static void delay(double t)
 		error("nanosleep failed");
 }
 
-static void shell(const char *cmd)
+static void shell(char *cmd)
 {
-	int r;
+	int status, r;
+	pid_t pid;
+	char *argv[2];
 
 	print(1, "Executing `%s'\n", cmd);
-	r = system(cmd);
-	if (r)
-		print(1, "status: %i\n", r);
+	argv[0] = cmd;
+	argv[1] = NULL;
+	pid = fork();
+	if (pid < 0)
+		error("fork failed");
+	if (!pid) {
+		execvp(cmd, argv);
+		error("execvp failed");
+	}
+	r = waitpid(pid, &status, 0);
+	if (r < 0)
+		error("waitpid failed");
+	print(1, "Executed `%s', status: %i\n", cmd, status);
 }
 
 static void process_options(int argc, char *argv[])
