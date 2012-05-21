@@ -451,6 +451,9 @@ static void usage(void)
 		"--stream=[N]	Capture N [1] buffers with QBUF/DQBUF and leave streaming on\n"
 		"-x [EC,EF,G]	Set coarse_itg, fine_itg, and gain [ATOMISP]\n"
 		"--exposure	(ATOMISP_IOC_S_EXPOSURE)\n"
+		"--priv_data[=file]\n"
+		"		Read and optionally save to file sensor OTP/EEPROM data\n"
+		"		(ATOMISP_IOC_G_SENSOR_PRIV_INT_DATA)\n"
 		"--ctrl-list	List supported V4L2 controls\n"
 		"--ctrl=$	Request given V4L2 controls\n"
 		"--fmt-list	List supported pixel formats\n"
@@ -651,6 +654,22 @@ static void print_time(void)
 		tv.tv_sec -= 1;
 	}
 	print(1, "[%3i.%06i]\n", tv.tv_sec, tv.tv_usec);
+}
+
+static void write_file(const char *name, const char *data, int size)
+{
+	FILE *f;
+	int r;
+
+	f = fopen(name, "wb");
+	if (!f)
+		error("can not open file `%s'", name);
+	r = fwrite(data, size, 1, f);
+	if (r != 1)
+		error("failed to write data to file");
+	r = fclose(f);
+	if (r != 0)
+		error("failed to close file");
 }
 
 static void vidioc_enuminput(void)
@@ -1345,6 +1364,23 @@ static void atomisp_ioc_s_exposure(const char *arg)
 		exposure.gain[0]);
 	xioctl(ATOMISP_IOC_S_EXPOSURE, &exposure);
 }
+
+static void atomisp_ioc_g_sensor_priv_int_data(const char *filename)
+{
+	char buffer[1024*32];
+	struct v4l2_private_int_data data;
+
+	CLEAR(data);
+	data.size = sizeof(buffer);
+	data.data = buffer;
+	print(1, "ATOMISP_IOC_G_SENSOR_PRIV_INT_DATA\n");
+	xioctl(ATOMISP_IOC_G_SENSOR_PRIV_INT_DATA, &data);
+	print(2, "> size: %i\n", data.size);
+	if (filename) {
+		write_file(filename, buffer, data.size);
+		print(2, "Wrote to file `%s'\n", filename);
+	}
+}
 #endif
 
 static void delay(double t)
@@ -1409,6 +1445,7 @@ static void process_options(int argc, char *argv[])
 			{ "capture", 2, NULL, 'a' },
 			{ "stream", 2, NULL, 1006 },
 			{ "exposure", 1, NULL, 'x' },
+			{ "priv_data", 2, NULL, 1008 },
 			{ "ctrl-list", 0, NULL, 1003 },
 			{ "fmt-list", 0, NULL, 1004 },
 			{ "ctrl", 1, NULL, 'c' },
@@ -1514,6 +1551,11 @@ static void process_options(int argc, char *argv[])
 			open_device(NULL);
 			atomisp_ioc_s_exposure(optarg);
 			break;
+
+		case 1008:	/* --priv_data=F, ATOMISP_IOC_G_SENSOR_PRIV_INT_DATA */
+			open_device(NULL);
+			atomisp_ioc_g_sensor_priv_int_data(optarg);
+			break;
 #endif
 
 		case 1003:	/* --ctrl-list */
@@ -1546,11 +1588,9 @@ static void process_options(int argc, char *argv[])
 static void capture_buffer_write(struct capture_buffer *cb, char *name, int i)
 {
 	static const char number_mark = '@';
-	FILE *f;
 	char b[256];
 	char n[5];
 	char *c;
-	int r;
 
 	if (!name || !cb->image)
 		return;
@@ -1570,13 +1610,7 @@ static void capture_buffer_write(struct capture_buffer *cb, char *name, int i)
 
 	print(1, "Writing buffer #%03i (%i bytes) format %s to `%s'\n", i, cb->length,
 		symbol_str(cb->pix_format.pixelformat, pixelformats), b);
-
-	f = fopen(b, "wb");
-	if (!f) error("can not open file");
-	r = fwrite(cb->image, cb->length, 1, f);
-	if (r != 1) error("can not write file");
-	r = fclose(f);
-	if (r) error("can not close file");
+	write_file(b, cb->image, cb->length);
 }
 
 static void cleanup(void)
