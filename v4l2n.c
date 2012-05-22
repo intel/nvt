@@ -460,6 +460,7 @@ static void usage(void)
 		"-c $	(VIDIOC_QUERYCTRL / VIDIOC_S/G_CTRL / VIDIOC_S/G_EXT_CTRLS)\n"
 		"-w [x]		Wait of x seconds (may be fractional)\n"
 		"--wait\n"
+		"--waitkey	Wait for character input from stdin\n"
 		"--shell=CMD	Run shell command CMD\n"
 		"\n"
 		"List of V4L2 controls syntax: <[V4L2_CID_]control_name_or_id>[+][=value|?|#][,...]\n"
@@ -1450,6 +1451,7 @@ static void process_options(int argc, char *argv[])
 			{ "fmt-list", 0, NULL, 1004 },
 			{ "ctrl", 1, NULL, 'c' },
 			{ "wait", 2, NULL, 'w' },
+			{ "waitkey", 0, NULL, 1009 },
 			{ "shell", 1, NULL, 1007 },
 			{ 0, 0, 0, 0 }
 		};
@@ -1574,6 +1576,12 @@ static void process_options(int argc, char *argv[])
 		case 'w':	/* -w, --wait */
 			delay(optarg ? atof(optarg) : 0.0);
 			break;
+
+		case 1009: {	/* --waitkey */
+			char b[256];
+			fgets(b, sizeof(b), stdin);
+			break;
+		}
 
 		case 1007:	/* --shell */
 			shell(optarg);
