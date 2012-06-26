@@ -454,6 +454,9 @@ static void usage(void)
 		"--priv_data[=file]\n"
 		"		Read and optionally save to file sensor OTP/EEPROM data\n"
 		"		(ATOMISP_IOC_G_SENSOR_PRIV_INT_DATA)\n"
+		"--motor_priv_data[=file]\n"
+		"		Read and optionally save to file af motor OTP/EEPROM data\n"
+		"		(ATOMISP_IOC_G_MOTOR_PRIV_INT_DATA)\n"
 		"--ctrl-list	List supported V4L2 controls\n"
 		"--ctrl=$	Request given V4L2 controls\n"
 		"--fmt-list	List supported pixel formats\n"
@@ -1366,7 +1369,7 @@ static void atomisp_ioc_s_exposure(const char *arg)
 	xioctl(ATOMISP_IOC_S_EXPOSURE, &exposure);
 }
 
-static void atomisp_ioc_g_sensor_priv_int_data(const char *filename)
+static void atomisp_ioc_g_priv_int_data(int request, const char *filename)
 {
 	char buffer[1024*32];
 	struct v4l2_private_int_data data;
@@ -1374,8 +1377,9 @@ static void atomisp_ioc_g_sensor_priv_int_data(const char *filename)
 	CLEAR(data);
 	data.size = sizeof(buffer);
 	data.data = buffer;
-	print(1, "ATOMISP_IOC_G_SENSOR_PRIV_INT_DATA\n");
-	xioctl(ATOMISP_IOC_G_SENSOR_PRIV_INT_DATA, &data);
+	print(1, request == ATOMISP_IOC_G_SENSOR_PRIV_INT_DATA ? "ATOMISP_IOC_G_SENSOR_PRIV_INT_DATA\n" :
+		 request == ATOMISP_IOC_G_MOTOR_PRIV_INT_DATA ? "ATOMISP_IOC_G_MOTOR_PRIV_INT_DATA\n" : "????");
+	xioctl(request, &data);
 	print(2, "> size: %i\n", data.size);
 	if (filename) {
 		write_file(filename, buffer, data.size);
@@ -1447,6 +1451,7 @@ static void process_options(int argc, char *argv[])
 			{ "stream", 2, NULL, 1006 },
 			{ "exposure", 1, NULL, 'x' },
 			{ "priv_data", 2, NULL, 1008 },
+			{ "motor_priv_data", 2, NULL, 1010 },
 			{ "ctrl-list", 0, NULL, 1003 },
 			{ "fmt-list", 0, NULL, 1004 },
 			{ "ctrl", 1, NULL, 'c' },
@@ -1556,7 +1561,12 @@ static void process_options(int argc, char *argv[])
 
 		case 1008:	/* --priv_data=F, ATOMISP_IOC_G_SENSOR_PRIV_INT_DATA */
 			open_device(NULL);
-			atomisp_ioc_g_sensor_priv_int_data(optarg);
+			atomisp_ioc_g_priv_int_data(ATOMISP_IOC_G_SENSOR_PRIV_INT_DATA, optarg);
+			break;
+
+		case 1010:	/* --motor_priv_data=F, ATOMISP_IOC_G_MOTOR_PRIV_INT_DATA */
+			open_device(NULL);
+			atomisp_ioc_g_priv_int_data(ATOMISP_IOC_G_MOTOR_PRIV_INT_DATA, optarg);
 			break;
 #endif
 
