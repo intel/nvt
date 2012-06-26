@@ -60,7 +60,7 @@ struct atomisp_tnr_config {
  */
 struct atomisp_histogram {
 	unsigned int num_elements;
-	void  *data;
+	void __user *data;
 };
 
 enum atomisp_ob_mode {
@@ -129,12 +129,19 @@ struct atomisp_3a_config {
 	unsigned int ae_y_coef_r;	/* [gain] Weight of R for Y */
 	unsigned int ae_y_coef_g;	/* [gain] Weight of G for Y */
 	unsigned int ae_y_coef_b;	/* [gain] Weight of B for Y */
+	unsigned int awb_lg_high_raw;	/* [intensity]
+					   AWB level gate high for raw */
+	unsigned int awb_lg_low;	/* [intensity] AWB level gate low */
+	unsigned int awb_lg_high;	/* [intensity] AWB level gate high */
 	int af_fir1_coef[7];	/* [factor] AF FIR coefficients of fir1 */
 	int af_fir2_coef[7];	/* [factor] AF FIR coefficients of fir2 */
 };
 
 /* structure that describes the 3A and DIS grids shared with 3A lib*/
 struct atomisp_grid_info {
+	/* ISP input size that is visible for user */
+	unsigned int isp_in_width;
+	unsigned int isp_in_height;
 	/* 3A statistics grid: */
 	unsigned int s3a_width;
 	unsigned int s3a_height;
@@ -156,19 +163,19 @@ struct atomisp_dis_vector {
 
 struct atomisp_dis_coefficients {
 	struct atomisp_grid_info grid_info;
-	short *vertical_coefficients;
-	short *horizontal_coefficients;
+	short __user *vertical_coefficients;
+	short __user *horizontal_coefficients;
 };
 
 struct atomisp_dis_statistics {
 	struct atomisp_grid_info grid_info;
-	int   *vertical_projections;
-	int   *horizontal_projections;
+	int __user *vertical_projections;
+	int __user *horizontal_projections;
 };
 
 struct atomisp_3a_statistics {
 	struct atomisp_grid_info  grid_info;
-	struct atomisp_3a_output *data;
+	struct atomisp_3a_output __user *data;
 };
 
 /* White Balance (Gain Adjust) */
@@ -240,8 +247,8 @@ struct atomisp_gamma_table {
 struct atomisp_morph_table {
 	unsigned int height;
 	unsigned int width;	/* number of valid elements per line */
-	unsigned short *coordinates_x[ATOMISP_MORPH_TABLE_NUM_PLANES];
-	unsigned short *coordinates_y[ATOMISP_MORPH_TABLE_NUM_PLANES];
+	unsigned short __user *coordinates_x[ATOMISP_MORPH_TABLE_NUM_PLANES];
+	unsigned short __user *coordinates_y[ATOMISP_MORPH_TABLE_NUM_PLANES];
 };
 
 #define ATOMISP_NUM_SC_COLORS	4
@@ -438,7 +445,7 @@ struct atomisp_sp_arg {
 struct atomisp_acc_fw_arg {
 	unsigned int fw_handle;
 	unsigned int index;
-	void *value;
+	void __user *value;
 	size_t size;
 };
 
@@ -451,7 +458,7 @@ struct atomisp_acc_fw_abort {
 struct atomisp_acc_fw_load {
 	unsigned int size;
 	unsigned int fw_handle;
-	void *data;
+	void __user *data;
 };
 
 /*
@@ -623,6 +630,21 @@ struct v4l2_private_int_data {
 #define ATOMISP_IOC_ACC_DESTAB \
 	_IOW('v', BASE_VIDIOC_PRIVATE + 54, struct atomisp_acc_fw_arg)
 
+/*
+ * Reserved ioctls. We have customer implementing it internally.
+ * We can't use both numbers to not cause ABI conflict.
+ * Anyway, those ioctls are hacks and not implemented by us:
+ *
+ * #define ATOMISP_IOC_G_SENSOR_REG \
+ *	_IOW('v', BASE_VIDIOC_PRIVATE + 55, struct atomisp_sensor_regs)
+ * #define ATOMISP_IOC_S_SENSOR_REG \
+ *	_IOW('v', BASE_VIDIOC_PRIVATE + 56, struct atomisp_sensor_regs)
+ */
+
+/* motor internal memory read */
+#define ATOMISP_IOC_G_MOTOR_PRIV_INT_DATA \
+	_IOWR('v', BASE_VIDIOC_PRIVATE + 57, struct v4l2_private_int_data)
+
 /*  ISP Private control IDs */
 #define V4L2_CID_ATOMISP_BAD_PIXEL_DETECTION \
 	(V4L2_CID_PRIVATE_BASE + 0)
@@ -686,6 +708,8 @@ struct v4l2_private_int_data {
 
 #define V4L2_BUF_FLAG_BUFFER_INVALID       0x0400
 #define V4L2_BUF_FLAG_BUFFER_VALID         0x0800
+
+#define V4L2_BUF_TYPE_VIDEO_CAPTURE_ION  (V4L2_BUF_TYPE_PRIVATE + 1024)
 
 /* Nonstandard color effects for V4L2_CID_COLORFX */
 enum {
