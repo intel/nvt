@@ -292,6 +292,25 @@ static int convert(void *in_buffer, int in_size, int width, int height, int stri
 		}
 		break;
 
+	case V4L2_PIX_FMT_GREY:
+		if (stride <= 0) stride = width;
+		s = src = duplicate_buffer(in_buffer, in_size, stride * height);
+		for (y = 0; y < height; y++) {
+			unsigned char *s1 = s;
+			unsigned char *d1 = d;
+			for (x = 0; x < width; x++) {
+				int b = *s1;
+				d1[0] = b;
+				d1[1] = b;
+				d1[2] = b;
+				s1 += 1;
+				d1 += dbpp;
+			}
+			s += stride;
+			d += dstride;
+		}
+		break;
+
 	default:
 		errno = EINVAL;
 		return -1;
