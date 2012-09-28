@@ -1037,10 +1037,12 @@ static void vidioc_dqbuf(void)
 	if (i < 0 || i >= MAX_RING_BUFFERS)
 		error("index out of range");
 
-	if (b.bytesused > vars.ring_buffers[i].querybuf.length ||
-	    b.bytesused > vars.format.fmt.pix.sizeimage)
-		error("Bad buffer size %i (querybuf %i, sizeimage %i)", b.bytesused,
-			vars.ring_buffers[i].querybuf.length, vars.format.fmt.pix.sizeimage);
+	if (b.bytesused > vars.format.fmt.pix.sizeimage)
+		error("Bad buffer size %i (sizeimage %i)",
+		      b.bytesused, vars.format.fmt.pix.sizeimage);
+	if (b.bytesused > vars.ring_buffers[i].querybuf.length)
+		print(1, "warning: Bad buffer size %i (querybuf %i)\n",
+		      b.bytesused, vars.ring_buffers[i].querybuf.length);
 
 	capture_buffer_save(vars.ring_buffers[i].start, &vars.format, &b);
 	vars.ring_buffers[i].queued = FALSE;
@@ -1065,7 +1067,7 @@ static void vidioc_qbuf(void)
 
 	if (m == V4L2_MEMORY_USERPTR) {
 		b.m.userptr = (unsigned long)vars.ring_buffers[i].start;
-		b.length = vars.ring_buffers[i].querybuf.length;
+		b.length = vars.format.fmt.pix.sizeimage;
 	} else if (m == V4L2_MEMORY_MMAP) {
 		/* Nothing here */
 	} else error("unsupported capture memory");
