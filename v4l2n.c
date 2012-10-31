@@ -1115,27 +1115,27 @@ static void capture(int frames)
 /* - Initialize capture unless it already has been done,
  * - Start streaming unless it already has been done,
  * - Capture (queue and dequeue) given number of frames,
- * This is more time-critical than capture() because it
- * keeps one frame in the queue at maximum. It allows
- * precisely mixing control settings with capture.
+ * Compared to capture(), this allows precisely mixing control
+ * settings with capture because streaming is left enabled.
+ * The argument `frames' may be zero, in which case streaming
+ * is enabled and buffers are queued but none are captured.
  */
 static void stream(int frames)
 {
-	bool first = FALSE;
 	int i;
 
-	if (frames > 0 && !vars.streaming) {
-		first = TRUE;
+	if (!vars.streaming) {
+		/* Initialize streaming and queue all buffers */
 		vidioc_querybuf();
-		vidioc_qbuf();
+		for (i = 0; i < vars.reqbufs.count; i++) {
+			vidioc_qbuf();
+		}
 		streamon(TRUE);
 	}
 
 	for (i = 0; i < frames; i++) {
-		if (!first)
-			vidioc_qbuf();
 		vidioc_dqbuf();
-		first = FALSE;
+		vidioc_qbuf();
 	}
 }
 
@@ -1640,6 +1640,10 @@ static void cleanup(void)
 	/* Save images */
 	for (i = 0; i < vars.num_capture_buffers; i++)
 		capture_buffer_write(&vars.capture_buffers[i], vars.output, i);
+
+	/* Stop streaming */
+	if (vars.streaming)
+		streamon(FALSE);
 
 	/* Free memory */
 	vidioc_querybuf_cleanup();
