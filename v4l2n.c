@@ -451,6 +451,8 @@ static void usage(void)
 		"--stream=[N]	Capture N [1] buffers with QBUF/DQBUF and leave streaming on\n"
 		"-x [EC,EF,G]	Set coarse_itg, fine_itg, and gain [ATOMISP]\n"
 		"--exposure	(ATOMISP_IOC_S_EXPOSURE)\n"
+		"--sensor_mode_data\n"
+		"		Get sensor mode data (ATOMISP_IOC_G_SENSOR_MODE_DATA) [ATOMISP]\n"
 		"--priv_data[=file]\n"
 		"		Read and optionally save to file sensor OTP/EEPROM data\n"
 		"		(ATOMISP_IOC_G_SENSOR_PRIV_INT_DATA)\n"
@@ -1388,6 +1390,41 @@ static void atomisp_ioc_g_priv_int_data(int request, const char *filename)
 		print(2, "Wrote to file `%s'\n", filename);
 	}
 }
+
+static void atomisp_ioc_g_sensor_mode_data(void)
+{
+	/* In principle this structure is sensor-specific.
+	 * In practice most (all?) drivers use the same structure.
+	 */
+	typedef unsigned int sensor_register;
+	struct sensor_mode_data {
+		sensor_register coarse_integration_time_min;
+		sensor_register coarse_integration_time_max_margin;
+		sensor_register fine_integration_time_min;
+		sensor_register fine_integration_time_max_margin;
+		sensor_register fine_integration_time_def;
+		sensor_register frame_length_lines;
+		sensor_register line_length_pck;
+		sensor_register read_mode;
+		int vt_pix_clk_freq_mhz;
+	};
+	struct atomisp_sensor_mode_data data;
+	struct sensor_mode_data *ov8830 = (struct sensor_mode_data *)&data;
+
+	CLEAR(data);
+	print(1, "ATOMISP_IOC_G_SENSOR_MODE_DATA\n");
+	xioctl(ATOMISP_IOC_G_SENSOR_MODE_DATA, &data);
+	print(2, "> coarse_integration_time_min:        %i\n", ov8830->coarse_integration_time_min);
+	print(2, "> coarse_integration_time_max_margin: %i\n", ov8830->coarse_integration_time_max_margin);
+	print(2, "> fine_integration_time_min:          %i\n", ov8830->fine_integration_time_min);
+	print(2, "> fine_integration_time_max_margin:   %i\n", ov8830->fine_integration_time_max_margin);
+	print(2, "> fine_integration_time_def:          %i\n", ov8830->fine_integration_time_def);
+	print(2, "> frame_length_lines:                 %i\n", ov8830->frame_length_lines);
+	print(2, "> line_length_pck:                    %i\n", ov8830->line_length_pck);
+	print(2, "> read_mode:                          0x%08X\n", ov8830->read_mode);
+	print(2, "> vt_pix_clk_freq_mhz:                %i\n", ov8830->vt_pix_clk_freq_mhz);
+}
+
 #endif
 
 static void delay(double t)
@@ -1452,6 +1489,7 @@ static void process_options(int argc, char *argv[])
 			{ "capture", 2, NULL, 'a' },
 			{ "stream", 2, NULL, 1006 },
 			{ "exposure", 1, NULL, 'x' },
+			{ "sensor_mode_data", 0, NULL, 1011 },
 			{ "priv_data", 2, NULL, 1008 },
 			{ "motor_priv_data", 2, NULL, 1010 },
 			{ "ctrl-list", 0, NULL, 1003 },
@@ -1559,6 +1597,11 @@ static void process_options(int argc, char *argv[])
 		case 'x':	/* --exposure=S, -x: ATOMISP_IOC_S_EXPOSURE */
 			open_device(NULL);
 			atomisp_ioc_s_exposure(optarg);
+			break;
+
+		case 1011:	/* --sensor_mode_data, ATOMISP_IOC_G_SENSOR_MODE_DATA */
+			open_device(NULL);
+			atomisp_ioc_g_sensor_mode_data();
 			break;
 
 		case 1008:	/* --priv_data=F, ATOMISP_IOC_G_SENSOR_PRIV_INT_DATA */
