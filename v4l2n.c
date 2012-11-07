@@ -459,6 +459,8 @@ static void usage(void)
 		"--motor_priv_data[=file]\n"
 		"		Read and optionally save to file af motor OTP/EEPROM data\n"
 		"		(ATOMISP_IOC_G_MOTOR_PRIV_INT_DATA)\n"
+		"--isp_dump=addr,len\n"
+		"		Dump ISP memory to kernel log\n"
 		"--ctrl-list	List supported V4L2 controls\n"
 		"--ctrl=$	Request given V4L2 controls\n"
 		"--fmt-list	List supported pixel formats\n"
@@ -1425,6 +1427,24 @@ static void atomisp_ioc_g_sensor_mode_data(void)
 	print(2, "> vt_pix_clk_freq_mhz:                %i\n", ov8830->vt_pix_clk_freq_mhz);
 }
 
+static void atomisp_memory_dump(char *arg)
+{
+	struct atomisp_de_config config;
+	int addr, len, r;
+
+	if (sscanf(arg, "%i,%i", &addr, &len) != 2)
+		error("missing address or length");
+
+	CLEAR(config);
+	config.pixelnoise = 0xDB60D83B;
+	config.c1_coring_threshold = addr;
+	config.c2_coring_threshold = len;
+	print(1, "ATOMISP_IOC_S_ISP_FALSE_COLOR_CORRECTION: addr 0x%08X len %i\n", addr, len);
+	r = xioctl_try(ATOMISP_IOC_S_ISP_FALSE_COLOR_CORRECTION, &config);
+	print(2, "> dumped ISP memory to kernel log\n");
+	if (r != -EDOTDOT) print(1, "> incorrect response %i from kernel\n", r);
+}
+
 #endif
 
 static void delay(double t)
@@ -1492,6 +1512,7 @@ static void process_options(int argc, char *argv[])
 			{ "sensor_mode_data", 0, NULL, 1011 },
 			{ "priv_data", 2, NULL, 1008 },
 			{ "motor_priv_data", 2, NULL, 1010 },
+			{ "isp_dump", 1, NULL, 9999 },
 			{ "ctrl-list", 0, NULL, 1003 },
 			{ "fmt-list", 0, NULL, 1004 },
 			{ "ctrl", 1, NULL, 'c' },
@@ -1612,6 +1633,11 @@ static void process_options(int argc, char *argv[])
 		case 1010:	/* --motor_priv_data=F, ATOMISP_IOC_G_MOTOR_PRIV_INT_DATA */
 			open_device(NULL);
 			atomisp_ioc_g_priv_int_data(ATOMISP_IOC_G_MOTOR_PRIV_INT_DATA, optarg);
+			break;
+
+		case 9999:	/* --isp_dump */
+			open_device(NULL);
+			atomisp_memory_dump(optarg);
 			break;
 #endif
 
