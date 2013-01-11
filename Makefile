@@ -13,6 +13,6 @@ yuv2yuv: yuv2yuv.c
 	gcc $(OPT) $@.c -o $@
 
 clean:
-	rm -f v4l2n raw2pnm
+	rm -f v4l2n raw2pnm yuv2yuv
 
 
