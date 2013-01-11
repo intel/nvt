@@ -389,7 +389,7 @@ static void error(char *msg, ...)
 	FILE *f = stdout;
 	va_list ap;
 	int e = errno;
- 
+
 	va_start(ap, msg);
 	fprintf(f, "%s: ", name);
 	vfprintf(f, msg, ap);
@@ -461,6 +461,7 @@ static void usage(void)
 		"		(ATOMISP_IOC_G_MOTOR_PRIV_INT_DATA)\n"
 		"--isp_dump=addr,len\n"
 		"		Dump ISP memory to kernel log\n"
+		"--cvf_parm	Set continuous vf parameters [num_captures,skip_frames,offset]\n"
 		"--ctrl-list	List supported V4L2 controls\n"
 		"--ctrl=$	Request given V4L2 controls\n"
 		"--fmt-list	List supported pixel formats\n"
@@ -1186,7 +1187,7 @@ static void open_device(const char *device)
 	if (device == NULL && vars.fd != -1)
 		return;
 
-	close_device();	
+	close_device();
 	if (!device || device[0] == 0)
 		device = DEFAULT_DEV;
 	print(1, "OPEN video device `%s'\n", device);
@@ -1445,6 +1446,24 @@ static void atomisp_memory_dump(char *arg)
 	if (r != -EDOTDOT) print(1, "> incorrect response %i from kernel\n", r);
 }
 
+static void atomisp_ioc_s_cvf_params(const char *arg)
+{
+	struct atomisp_cont_capture_conf cvf_parm;
+	int val[3];
+
+	CLEAR(cvf_parm);
+	value_get(val, SIZE(val), &arg);
+
+	cvf_parm.num_captures = val[0];
+	cvf_parm.skip_frames = val[1];
+	cvf_parm.offset = val[2];
+
+	print(1, "ATOMISP_IOC_S_CONT_CAPTURE_CONFIG: num_captures %d skip_frames %d offset %d\n",
+		cvf_parm.num_captures,
+		cvf_parm.skip_frames,
+		cvf_parm.offset);
+	xioctl(ATOMISP_IOC_S_CONT_CAPTURE_CONFIG, &cvf_parm);
+}
 #endif
 
 static void delay(double t)
@@ -1513,6 +1532,7 @@ static void process_options(int argc, char *argv[])
 			{ "priv_data", 2, NULL, 1008 },
 			{ "motor_priv_data", 2, NULL, 1010 },
 			{ "isp_dump", 1, NULL, 9999 },
+			{ "cvf_parm", 1, NULL, 1012 },
 			{ "ctrl-list", 0, NULL, 1003 },
 			{ "fmt-list", 0, NULL, 1004 },
 			{ "ctrl", 1, NULL, 'c' },
@@ -1538,7 +1558,7 @@ static void process_options(int argc, char *argv[])
 				vars.verbosity++;
 			}
 			break;
-		
+
 		case 'q':	/* --quiet, -q */
 			vars.verbosity--;
 			break;
@@ -1638,6 +1658,10 @@ static void process_options(int argc, char *argv[])
 		case 9999:	/* --isp_dump */
 			open_device(NULL);
 			atomisp_memory_dump(optarg);
+			break;
+
+		case 1012:	/* --cvf_parm */
+			atomisp_ioc_s_cvf_params(optarg);
 			break;
 #endif
 
