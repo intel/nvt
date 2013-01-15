@@ -3,7 +3,7 @@ OPT = -Wall -m32 -static -g -I.
 .PHONY: all clean
 all: v4l2n raw2pnm yuv2yuv
 
-v4l2n: v4l2n.c
+v4l2n: v4l2n.c linux/videodev2.h linux/atomisp.h
 	gcc $(OPT) $@.c -o $@
 
 raw2pnm: raw2pnm.c
