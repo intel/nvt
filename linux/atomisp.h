@@ -23,6 +23,11 @@
 #define _ATOM_ISP_H
 
 #include <linux/types.h>
+#include <linux/version.h>
+
+#define ATOMISP_CSS_VERSION_15	KERNEL_VERSION(1, 5, 0)
+#define ATOMISP_CSS_VERSION_17	KERNEL_VERSION(1, 7, 0)
+#define ATOMISP_CSS_VERSION_20	KERNEL_VERSION(2, 0, 0)
 
 /*ISP binary running mode*/
 #define CI_MODE_PREVIEW		0x8000
@@ -241,6 +246,11 @@ struct atomisp_dp_config {
 	unsigned int gain;
 };
 
+/* XNR threshold */
+struct atomisp_xnr_config {
+	unsigned int threshold;
+};
+
 struct atomisp_parm {
 	struct atomisp_grid_info info;
 	struct atomisp_wb_config wb_config;
@@ -252,6 +262,26 @@ struct atomisp_parm {
 	struct atomisp_nr_config nr_config;
 	struct atomisp_ee_config ee_config;
 	struct atomisp_tnr_config tnr_config;
+};
+
+struct atomisp_parameters {
+	struct atomisp_wb_config *wb_config;
+	struct atomisp_cc_config *cc_config;
+	struct atomisp_ob_config *ob_config;
+	struct atomisp_de_config *de_config;
+	struct atomisp_ce_config *ce_config;
+	struct atomisp_dp_config *dp_config;
+	struct atomisp_nr_config *nr_config;
+	struct atomisp_ee_config *ee_config;
+	struct atomisp_tnr_config *tnr_config;
+	struct atomisp_shading_table *shading_table;
+	struct atomisp_morph_table *morph_table;
+	struct atomisp_macc_config *macc_config;
+	struct atomisp_gamma_table *gamma_table;
+	struct atomisp_ctc_table *ctc_table;
+	struct atomisp_xnr_config *xnr_config;
+	struct atomisp_gc_config *gc_config;
+	struct atomisp_3a_config *a3a_config;
 };
 
 #define ATOMISP_GAMMA_TABLE_SIZE        1024
@@ -364,11 +394,26 @@ struct atomisp_overlay {
 	unsigned int overlay_start_y;
 };
 
-/* Sensor resolution specific data for AE calculation.
- * This contains sensor specific data, so we simply use an array of 64
- * bytes. */
+/* Sensor resolution specific data for AE calculation.*/
 struct atomisp_sensor_mode_data {
-	unsigned char data[64];
+	unsigned int coarse_integration_time_min;
+	unsigned int coarse_integration_time_max_margin;
+	unsigned int fine_integration_time_min;
+	unsigned int fine_integration_time_max_margin;
+	unsigned int fine_integration_time_def;
+	unsigned int frame_length_lines;
+	unsigned int line_length_pck;
+	unsigned int read_mode;
+	unsigned int vt_pix_clk_freq_mhz;
+	unsigned int crop_horizontal_start; /* Sensor crop start cord. (x0,y0)*/
+	unsigned int crop_vertical_start;
+	unsigned int crop_horizontal_end; /* Sensor crop end cord. (x1,y1)*/
+	unsigned int crop_vertical_end;
+	unsigned int output_width; /* input size to ISP after binning/scaling */
+	unsigned int output_height;
+	uint8_t binning_factor_x; /* horizontal binning factor used */
+	uint8_t binning_factor_y; /* vertical binning factor used */
+	uint8_t reserved[2];
 };
 
 struct atomisp_exposure {
@@ -400,6 +445,8 @@ enum atomisp_focus_hp {
 enum atomisp_camera_port {
 	ATOMISP_CAMERA_PORT_SECONDARY,
 	ATOMISP_CAMERA_PORT_PRIMARY,
+	ATOMISP_CAMERA_PORT_THIRD,
+	ATOMISP_CAMERA_NR_PORTS
 };
 
 /* Flash modes. Default is off.
@@ -461,7 +508,8 @@ enum atomisp_acc_memory {
 	ATOMISP_ACC_MEMORY_DMEM,
 	ATOMISP_ACC_MEMORY_VMEM,
 	ATOMISP_ACC_MEMORY_VAMEM1,
-	ATOMISP_ACC_MEMORY_VAMEM2
+	ATOMISP_ACC_MEMORY_VAMEM2,
+	ATOMISP_ACC_NR_MEMORY		/* Must be last */
 };
 
 struct atomisp_sp_arg {
@@ -503,13 +551,39 @@ struct atomisp_acc_fw_load {
 	void __user *data;
 };
 
+/*
+ * Load firmware to specified pipeline.
+ * For CSS 1.5 only.
+ */
+struct atomisp_acc_fw_load_to_pipe {
+	__u32 flags;			/* Flags, see below for valid values */
+	unsigned int fw_handle;		/* Handle, filled by kernel. */
+	__u32 size;			/* Firmware binary size */
+	void __user *data;		/* Pointer to firmware */
+	__u32 type;			/* Binary type */
+	__u32 reserved[3];		/* Set to zero */
+};
+
+#define ATOMISP_ACC_FW_LOAD_FL_PREVIEW		(1 << 0)
+#define ATOMISP_ACC_FW_LOAD_FL_COPY		(1 << 1)
+#define ATOMISP_ACC_FW_LOAD_FL_VIDEO		(1 << 2)
+#define ATOMISP_ACC_FW_LOAD_FL_CAPTURE		(1 << 3)
+#define ATOMISP_ACC_FW_LOAD_FL_ACC		(1 << 4)
+
+#define ATOMISP_ACC_FW_LOAD_TYPE_NONE		0 /* Normal binary: don't use */
+#define ATOMISP_ACC_FW_LOAD_TYPE_OUTPUT		1 /* Stage on output */
+#define ATOMISP_ACC_FW_LOAD_TYPE_VIEWFINDER	2 /* Stage on viewfinder */
+#define ATOMISP_ACC_FW_LOAD_TYPE_STANDALONE	3 /* Stand-alone acceleration */
+
 struct atomisp_acc_map {
-	__u32 flags;			/* Set to zero */
+	__u32 flags;			/* Flags, see list below */
 	__u32 length;			/* Length of data in bytes */
 	void __user *user_ptr;		/* Pointer into user space */
 	unsigned long css_ptr;		/* Pointer into CSS address space */
-	__u32 reserved;			/* Set to zero */
+	__u32 reserved[4];		/* Set to zero */
 };
+
+#define ATOMISP_MAP_FLAG_NOFLUSH	0x0001	/* Do not flush cache */
 
 /*
  * V4L2 private internal data interface.
@@ -749,18 +823,8 @@ struct v4l2_private_int_data {
 /* Request a number of flash-exposed frames. The frame status can be
  * found in the reserved field in the v4l2_buffer struct. */
 #define V4L2_CID_REQUEST_FLASH             (V4L2_CID_CAMERA_LASTP1 + 3)
-/* Flash intensity, in percentage. */
-#define V4L2_CID_FLASH_INTENSITY           (V4L2_CID_CAMERA_LASTP1 + 4)
 /* Query flash driver status. See enum atomisp_flash_status above. */
 #define V4L2_CID_FLASH_STATUS              (V4L2_CID_CAMERA_LASTP1 + 5)
-/* Torch intensity, in percentage. */
-#define V4L2_CID_FLASH_TORCH_INTENSITY     (V4L2_CID_CAMERA_LASTP1 + 6)
-/* Indicator intensity, in percentage. */
-#define V4L2_CID_FLASH_INDICATOR_INTENSITY (V4L2_CID_CAMERA_LASTP1 + 7)
-/* Flash timeout (in ms). */
-#define V4L2_CID_FLASH_TIMEOUT             (V4L2_CID_CAMERA_LASTP1 + 8)
-/* Enable (1) or disable (0) the flash (only valid in FLASH mode). */
-#define V4L2_CID_FLASH_STROBE              (V4L2_CID_CAMERA_LASTP1 + 9)
 /* Set the flash mode (see enum atomisp_flash_mode) */
 #define V4L2_CID_FLASH_MODE                (V4L2_CID_CAMERA_LASTP1 + 10)
 
@@ -780,6 +844,13 @@ struct v4l2_private_int_data {
 
 /* number of frames to skip at stream start */
 #define V4L2_CID_G_SKIP_FRAMES		   (V4L2_CID_CAMERA_LASTP1 + 17)
+
+/* Query sensor's 2A status */
+#define V4L2_CID_2A_STATUS                 (V4L2_CID_CAMERA_LASTP1 + 18)
+#define V4L2_2A_STATUS_AE_READY            (1 << 0)
+#define V4L2_2A_STATUS_AWB_READY           (1 << 1)
+
+#define V4L2_CID_FMT_AUTO			(V4L2_CID_CAMERA_LASTP1 + 19)
 
 #define V4L2_BUF_FLAG_BUFFER_INVALID       0x0400
 #define V4L2_BUF_FLAG_BUFFER_VALID         0x0800
