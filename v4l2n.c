@@ -15,6 +15,7 @@
 #include <time.h>
 #include <limits.h>
 #include <sys/wait.h>
+#include <stdint.h>
 #include "linux/videodev2.h"
 
 #define USE_ATOMISP	1
@@ -906,7 +907,7 @@ static void print_buffer(struct v4l2_buffer *b, char c)
 		BUF_FLAG(PFRAME),
 		BUF_FLAG(BFRAME),
 		BUF_FLAG(TIMECODE),
-		BUF_FLAG(INPUT),
+		// BUF_FLAG(INPUT),
 		// BUF_FLAG(PREPARED),
 		// BUF_FLAG(NO_CACHE_INVALIDATE),
 		// BUF_FLAG(NO_CACHE_CLEAN),
@@ -930,7 +931,7 @@ static void print_buffer(struct v4l2_buffer *b, char c)
 	else if (b->memory == V4L2_MEMORY_USERPTR)
 	print(v, "%c userptr:   0x%08X\n", c, b->m.userptr);
 	print(v, "%c length:    %i\n", c, b->length);
-	print(v, "%c input:     %i\n", c, b->input);
+//	print(v, "%c input:     %i\n", c, b->input);
 }
 
 static void vidioc_querybuf_cleanup(void)
