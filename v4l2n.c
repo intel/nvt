@@ -450,7 +450,7 @@ static void usage(void)
 		"-a [N]		Capture N [1] buffers with QBUF/DQBUF\n"
 		"--capture=[N]\n"
 		"--stream=[N]	Capture N [1] buffers with QBUF/DQBUF and leave streaming on\n"
-		"-x [EC,EF,G]	Set coarse_itg, fine_itg, and gain [ATOMISP]\n"
+		"-x [EC,EF,AG,DG] Set coarse_itg, fine_itg, analog gain, and digital gain [ATOMISP]\n"
 		"--exposure	(ATOMISP_IOC_S_EXPOSURE)\n"
 		"--sensor_mode_data\n"
 		"		Get sensor mode data (ATOMISP_IOC_G_SENSOR_MODE_DATA) [ATOMISP]\n"
@@ -1362,18 +1362,20 @@ static void request_controls(char *start)
 static void atomisp_ioc_s_exposure(const char *arg)
 {
 	struct atomisp_exposure exposure;
-	int val[3];
+	int val[4];
 
 	CLEAR(exposure);
 	value_get(val, SIZE(val), &arg);
 	exposure.integration_time[0] = val[0];
 	exposure.integration_time[1] = val[1];
 	exposure.gain[0] = val[2];
+	exposure.gain[1] = val[3];
 
-	print(1, "ATOMISP_IOC_S_EXPOSURE integration_time={%i,%i} gain={%i}\n",
+	print(1, "ATOMISP_IOC_S_EXPOSURE integration_time={%i,%i} gain={%i,%i}\n",
 		exposure.integration_time[0],
 		exposure.integration_time[1],
-		exposure.gain[0]);
+		exposure.gain[0],
+		exposure.gain[1]);
 	xioctl(ATOMISP_IOC_S_EXPOSURE, &exposure);
 }
 
