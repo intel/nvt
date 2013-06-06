@@ -1,6 +1,6 @@
 	V4L2N Image and Video test tool
 	-------------------------------
-	Copyright 2011,2012 Intel
+	Copyright 2011-2013 Intel
 	Author: Tuukka Toivonen <tuukka.toivonen@intel.com>
 
 = Introduction =
@@ -41,15 +41,17 @@ that is not needed.
 
 = Obtaining and Compiling =
 
-v4l2n repository is in Gitorius:
-	http://gitorious.tl.intel.com/camera-tmp/v4l2ntool
+v4l2n anonymous repository is on TeamForge:
+	git://git-amr-4.devtools.intel.com/v4l2n-source.git
+	http://git-amr-4.devtools.intel.com/gerrit/gitweb?p=v4l2n-source.git
 you can clone the source tree with:
-	git clone git://gitorious.tl.intel.com/camera-tmp/v4l2ntool.git
-If this doesn't work, try:
-	git clone git@gitorious.tl.intel.com:camera-tmp/v4l2ntool.git
+	git clone git://git-amr-4.devtools.intel.com/v4l2n-source.git
+Precompiled binary packages are also available on TeamForge project v4l2n.
+You may need TeamForge account to access these.
+
 
 Compilation:
-	cd v4l2ntool
+	cd v4l2n-source
 	make
 
 This should create v4l2n which is the main binary and raw2pnm which
@@ -88,12 +90,12 @@ are not suitable.
 
 V4L2 controls can be get, set, and queried with the --ctrl command. The
 list of supported controls is shown with option --ctrl-list. To set a simple
-control values (VIDIOC_S_CTRL) use option "--ctrl HFLIP=1", for example.
+control values (VIDIOC_S_CTRL) use option "--ctrl=HFLIP=1", for example.
 Usually extended controls are preferred and those are selected by adding
-a "+" sign after control name, such as "--ctrl HFLIP+=1". You can get values
-by using a question mark, eg. "--ctrl HFLIP?" or "--ctrl HFLIP+?" for
+a "+" sign after control name, such as "--ctrl=HFLIP+=1". You can get values
+by using a question mark, eg. "--ctrl=HFLIP?" or "--ctrl=HFLIP+?" for
 VIDIOC_G_EXT_CTRLS. Use a hash character "#" to query control
-("--ctrl 'HFLIP#'").
+("--ctrl='HFLIP#'").
 
 == v4l2n.sh ==
 
@@ -126,18 +128,19 @@ to enumerate device cameras. When run, v4l2n.sh -a
 Without the -a option, v4l2n.sh does the remounting and copying of v4l2n
 into the device but runs v4l2n with command line given to v4l2n.sh. Thus,
 you could query the current format with
-	./v4l2n.sh "--fmt '?'"
-You may need to quotes the parameters given to v4l2n.sh.
+	./v4l2n.sh "--fmt='?'"
+You may need to quote the parameters given to v4l2n.sh.
 
 == Examples ==
 
 Setting exposure (Intel V4L2 extension):
-	./v4l2n.sh --exposure=12,34,56
-where 12 is coarse exposure, 34 is fine exposure, and 56 is gain.
-These are directly register values.
+	./v4l2n.sh --exposure=12,34,56,78
+where 12 is coarse exposure, 34 is fine exposure, 56 is analog gain,
+and 78 is digital gain. These are directly register values.
 
 Run eternal viewfinder with adb (works from Windows prompt too):
-	adb shell mount -o remount -w /dev/block/mmcblk0p6 /system
+	adb root
+	adb remount
 	adb push v4l2n /system/
 	adb shell /system/v4l2n --input 1 --parm type=1 --fmt 
 		type=1,width=800,height=600,pixelformat=NV12 --reqbufs
@@ -166,7 +169,7 @@ Remember to check the resolution, it should match with what "--fmt '?'"
 displays.
 
 == References ==
-	http://gitorious.tl.intel.com/camera-tmp/v4l2ntool
+	git://git-amr-4.devtools.intel.com/v4l2n-source.git
 		(v4l2n repository)
 	http://v4l2spec.bytesex.org/spec/
 	http://linuxtv.org/downloads/v4l-dvb-apis/
