@@ -7,6 +7,7 @@ if [ "$V4L2N_FORMAT" = "" ]; then V4L2N_FORMAT=NV12;   fi
 if [ "$V4L2N_INPUT"  = "" ]; then V4L2N_INPUT=1;       fi
 if [ "$V4L2N_VIEWER" = "" ]; then V4L2N_VIEWER=gqview; fi
 if [ "$V4L2N_DIR"    = "" ]; then V4L2N_DIR=/cache;    fi
+if [ "$ADB"          = "" ]; then ADB=/usr/bin/adb.pft;fi
 
 P="$@"
 AUTO=""
@@ -28,16 +29,16 @@ if [ "$P" = "-a" ]; then
 	P="$P -o $V4L2N_DIR/testimage_@.raw"
 fi
 
-adb shell 'mount -o remount -w /dev/block/mmcblk0p6 /system'
-adb shell rm "$V4L2N_DIR/testimage_*.raw"
-adb push v4l2n /system/ && \
-adb shell "/system/v4l2n --enuminput" && \
+$ADB shell 'mount -o remount -w /dev/block/mmcblk0p6 /system'
+$ADB shell rm "$V4L2N_DIR/testimage_*.raw"
+$ADB push v4l2n /system/ && \
+$ADB shell "/system/v4l2n --enuminput" && \
 echo "/system/v4l2n $P" && \
-adb shell "/system/v4l2n $P"
+$ADB shell "/system/v4l2n $P"
 
 if [ "$AUTO" = "1" ]; then
 	for i in 0 1; do
-		adb pull $V4L2N_DIR/testimage_00$i.raw /tmp/
+		$ADB pull $V4L2N_DIR/testimage_00$i.raw /tmp/
 		if [ -s /tmp/testimage_00$i.raw ]; then
 			./raw2pnm -x $V4L2N_WIDTH -y $V4L2N_HEIGHT -f $V4L2N_FORMAT /tmp/testimage_00$i.raw /tmp/testimage_00$i.pnm
 		fi
