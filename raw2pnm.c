@@ -270,7 +270,7 @@ static int convert(void *in_buffer, int in_size, int width, int height, int stri
 {
 	static const int dbpp = 3;
 	int y, x, r, g, b;
-	int oddrow, oddpix;
+	int oddrow, oddpix, initrow, initpix;
 	unsigned char *src = NULL;
 	unsigned char *s, *u;
 	unsigned char *d = out_buffer;
@@ -321,15 +321,22 @@ static int convert(void *in_buffer, int in_size, int width, int height, int stri
 		}
 		break;
 
+	case V4L2_PIX_FMT_SBGGR10:
+	case V4L2_PIX_FMT_SGBRG10:
+	case V4L2_PIX_FMT_SRGGB10:
 	case V4L2_PIX_FMT_SGRBG10:		/* 2 bytes per pixel, little endian */
+		if (format == V4L2_PIX_FMT_SBGGR10) { initrow = 1; initpix = 0; } else
+		if (format == V4L2_PIX_FMT_SGBRG10) { initrow = 1; initpix = 1; } else
+		if (format == V4L2_PIX_FMT_SRGGB10) { initrow = 0; initpix = 1; } else
+		if (format == V4L2_PIX_FMT_SGRBG10) { initrow = 0; initpix = 0; }
 		if (stride <= 0) stride = width * 2;
 		s = src = duplicate_buffer(in_buffer, in_size, stride * height);
 		r = g = b = 0;
-		oddrow = 0;
+		oddrow = initrow;
 		for (y = 0; y < height; y++) {
 			unsigned char *s1 = s;
 			unsigned char *d1 = d;
-			oddpix = 0;
+			oddpix = initpix;
 			for (x = 0; x < width; x++) {
 				if (!oddrow && !oddpix) g = get_word(s1);
 				if (!oddrow &&  oddpix) r = get_word(s1);
