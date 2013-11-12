@@ -20,7 +20,7 @@ static int hextoval(int v)
 	return -1;
 }
 
-static void write_file(const char *name, const char *data, int size)
+static void write_file(const char *name, const unsigned char *data, int size)
 {
 	FILE *f;
 	int r;
@@ -36,22 +36,17 @@ static void write_file(const char *name, const char *data, int size)
 		error("failed to close file");
 }
 
-int main(int argc, char *argv[])
+static unsigned char *txt2buf(FILE *f, int size[2])
 {
-	FILE *f = stdin;
-	int width = 0;
 	int thiswidth = 0;
-	int height = 0;
 	int bufsize = 4096;
-	char *buf;
+	unsigned char *buf;
 	int len = 0;
 	int val = 0;
 	int bits = 0;
-	char *name;
 	int c;
 
-	if (argc != 2) error("give exactly one argument for output filename\n");
-	name = argv[1];
+	size[0] = size[1] = 0;
 
 	buf = malloc(bufsize);
 	if (!buf) error("out of memory");
@@ -76,13 +71,13 @@ int main(int argc, char *argv[])
 
 		if (c == '\n' || c == EOF) {
 			/* End of line */
-			if (width <= 0) {
-				width = thiswidth;
-				printf("detected line length %i bytes\n", width);
+			if (size[0] <= 0) {
+				size[0] = thiswidth;
+				printf("detected line length %i bytes\n", size[0]);
 			}
 			if (thiswidth > 0) {
-				if (thiswidth != width) error("bad line length");
-				height++;
+				if (thiswidth != size[0]) error("bad line length");
+				size[1]++;
 				thiswidth = 0;
 			}
 		}
@@ -95,9 +90,22 @@ int main(int argc, char *argv[])
 		}
 	} while (c != EOF);
 
-	printf("read %i bytes of data (%ix%i), writing to %s\n", len, width, height, name);
-	write_file(name, buf, len);
+	return buf;
+}
+
+int main(int argc, char *argv[])
+{
+	char *name;
+	unsigned char *buf;
+	int size[2];
+
+	if (argc != 2) error("give exactly one argument for output filename\n");
+	name = argv[1];
+
+	buf = txt2buf(stdin, size);
+
+	printf("read %ix%i bytes of data, writing to %s\n", size[0], size[1], name);
+	write_file(name, buf, size[0] * size[1]);
 
 	return 0;
 }
-
