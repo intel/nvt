@@ -133,6 +133,41 @@ static unsigned char *uncompress(unsigned char *compr, int compr_size[2], int un
 	return buf;
 }
 
+static void write_pixel(unsigned char *p, unsigned int v)
+{
+	p[0] = v & 0xff;
+	p[1] = (v >> 8) & 0xff;
+}
+
+static unsigned char *uncompress_mipi(unsigned char *compr, int compr_size[2], int uncomp_size[2])
+{
+	unsigned char *buf;		/* Resulting buffer */
+	unsigned char *sa;		/* Source byte address */
+	unsigned char *da;		/* Destination byte address */
+	int y, x;			/* y, and x counters */
+	const int d_byp = 2;		/* Destination bytes per pixel */
+	const int s_bpp = 10;		/* Source bits per pixel */
+
+	uncomp_size[0] = compr_size[0] * 8 / s_bpp;	/* Size in pixels */
+	uncomp_size[1] = compr_size[1];
+	buf = calloc(uncomp_size[0] * d_byp * compr_size[1], 1);
+
+	for (y = 0; y < uncomp_size[1]; y++) {
+		sa = compr + compr_size[0] * y;
+		da = buf + uncomp_size[0] * d_byp * y;
+		for (x = 0; x <= uncomp_size[0] - 4; x += 4) {
+			write_pixel(da+0, (sa[0] << 2) | ((sa[4] >> 0) & 3));
+			write_pixel(da+2, (sa[1] << 2) | ((sa[4] >> 2) & 3));
+			write_pixel(da+4, (sa[2] << 2) | ((sa[4] >> 4) & 3));
+			write_pixel(da+6, (sa[3] << 2) | ((sa[4] >> 6) & 3));
+			sa += 4 * s_bpp / 8;
+			da += 4 * d_byp;
+		}
+	}
+
+	return buf;
+}
+
 int main(int argc, char *argv[])
 {
 	char *name;
@@ -147,7 +182,7 @@ int main(int argc, char *argv[])
 	compr = txt2buf(stdin, compr_size);
 	printf("read %ix%i bytes of data\n", compr_size[0], compr_size[1]);
 
-	uncomp = uncompress(compr, compr_size, uncomp_size);
+	uncomp = uncompress_mipi(compr, compr_size, uncomp_size);
 	printf("uncompressed to %ix%i pixels of data\n", uncomp_size[0], uncomp_size[1]);
 
 	printf("writing to %s\n", name);
