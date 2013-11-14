@@ -4,7 +4,7 @@
 
 static void error(char *s)
 {
-	printf("%s\n", s);
+	fprintf(stderr, "%s\n", s);
 	exit(1);
 }
 
