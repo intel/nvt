@@ -338,10 +338,15 @@ static int convert(void *in_buffer, int in_size, int width, int height, int stri
 			unsigned char *d1 = d;
 			oddpix = initpix;
 			for (x = 0; x < width; x++) {
-				if (!oddrow && !oddpix) g = get_word(s1);
-				if (!oddrow &&  oddpix) r = get_word(s1);
-				if ( oddrow && !oddpix) b = get_word(s1);
-				if ( oddrow &&  oddpix) g = get_word(s1);
+				if (!oddrow) {
+					if (!oddpix) g = get_word(s1);
+					if ( oddpix) r = get_word(s1);
+					if (!oddpix && y > 0) b = get_word(s1 - stride);
+				} else {
+					if (!oddpix) b = get_word(s1);
+					if ( oddpix) g = get_word(s1);
+					if ( oddpix && y > 0) r = get_word(s1 - stride);
+				}
 				d1[0] = r;
 				d1[1] = g;
 				d1[2] = b;
