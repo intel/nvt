@@ -1,5 +1,5 @@
 OPT = -Wall -m32 -static -g -I.
-PROGS = v4l2n raw2pnm yuv2yuv txt2raw
+PROGS = v4l2n raw2pnm yuv2yuv txt2raw pnm2txt
 
 .PHONY: all clean
 all: $(PROGS)
@@ -14,6 +14,9 @@ yuv2yuv: yuv2yuv.c
 	gcc $(OPT) $@.c -o $@
 
 txt2raw: txt2raw.c
+	gcc $(OPT) $@.c -o $@
+
+pnm2txt: txt2raw.c
 	gcc $(OPT) $@.c -o $@
 
 clean:
