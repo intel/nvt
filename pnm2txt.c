@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <string.h>
 
 enum format {
 	SBGGR10,
@@ -27,14 +28,45 @@ static unsigned char *read_pnm(char *input, int size[2])
 {
 	FILE *f;
 	unsigned char *buf, *p;
-	int r, maxval, byp;
+	int r, tokens, maxval, byp;
 	int y, x, c, b;
+	char token[16];
 
 	f = fopen(input, "rb");
 	if (!f) error("failed to open input file");
-	r = fscanf(f, "P6 %u %u %u", &size[0], &size[1], &maxval);
-	if (r != 3) error("bad ppm header");
-	if (!isspace(fgetc(f))) error("bad ppm header blank");
+
+	/* Read PNM header */
+	tokens = 0;
+	b = 0;
+	c = fgetc(f);
+	do {
+		if ((isspace(c) || c == '#') && b > 0) {
+			/* New token found */
+			token[b] = 0;
+			if (tokens == 0) {
+				if (strcmp("P6", token) != 0) error("bad ppm header");
+			} else if (tokens >= 1 && tokens <= 2) {
+				r = sscanf(token, "%u", &size[tokens - 1]);
+				if (r != 1) error("bad resolution");
+			} else {
+				r = sscanf(token, "%u", &maxval);
+				if (r != 1) error("bad maxval");
+				break;		/* Done */
+			}
+			tokens++;
+			b = 0;
+		}
+		while (isspace(c) || c == '#') {
+			if (c == '#') while (c != '\n' && c != EOF) c = fgetc(f);
+			c = fgetc(f);
+		}
+		if (c == EOF) error("bad ppm file");
+		token[b++] = c;
+		if (sizeof(token) < b) error("bad ppm header");
+		c = fgetc(f);
+	} while (1);
+
+	/* Read actual image data */
 	byp = maxval < 256 ? 1 : 2;
 	p = buf = malloc(size[0] * size[1] * 3 * 2);
 	for (y = 0; y < size[1]; y++)
