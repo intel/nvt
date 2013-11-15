@@ -269,7 +269,7 @@ static inline unsigned int get_word(unsigned char *src)
 static int convert(void *in_buffer, int in_size, int width, int height, int stride, __u32 format, void *out_buffer)
 {
 	static const int dbpp = 3;
-	int y, x, r, g, b;
+	int y, x, r, g, b, bpp;
 	int oddrow, oddpix, initrow, initpix;
 	unsigned char *src = NULL;
 	unsigned char *s, *u;
@@ -303,17 +303,24 @@ static int convert(void *in_buffer, int in_size, int width, int height, int stri
 		break;
 
 	case V4L2_PIX_FMT_GREY:
-		if (stride <= 0) stride = width;
+	case V4L2_PIX_FMT_Y16:
+		bpp = (format == V4L2_PIX_FMT_Y16) ? 2 : 1;
+		if (stride <= 0) stride = width * bpp;
 		s = src = duplicate_buffer(in_buffer, in_size, stride * height);
 		for (y = 0; y < height; y++) {
 			unsigned char *s1 = s;
 			unsigned char *d1 = d;
 			for (x = 0; x < width; x++) {
-				int b = *s1;
+				int b = s1[0];
+				if (bpp == 2) {
+					b |= s1[1] << 8;
+					if (b > 1023) error("Y16 image not in range 0..1023");
+					b >>= 2;
+				}
 				d1[0] = b;
 				d1[1] = b;
 				d1[2] = b;
-				s1 += 1;
+				s1 += bpp;
 				d1 += dbpp;
 			}
 			s += stride;
