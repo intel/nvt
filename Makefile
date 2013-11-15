@@ -16,7 +16,7 @@ yuv2yuv: yuv2yuv.c
 txt2raw: txt2raw.c
 	gcc $(OPT) $@.c -o $@
 
-pnm2txt: txt2raw.c
+pnm2txt: pnm2txt.c
 	gcc $(OPT) $@.c -o $@
 
 clean:
