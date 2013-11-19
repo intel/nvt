@@ -69,6 +69,7 @@ static struct {
 	int verbosity;
 	int fd;
 	bool save_images;
+	bool calculate_stats;
 	struct v4l2_format format;
 	struct v4l2_requestbuffers reqbufs;
 	struct ring_buffer ring_buffers[MAX_RING_BUFFERS];
@@ -646,6 +647,7 @@ static void usage(void)
 		"--wait\n"
 		"--waitkey	Wait for character input from stdin\n"
 		"--shell=CMD	Run shell command CMD\n"
+		"--statistics	Calculate statistics from each frame\n"
 		"\n"
 		"List of V4L2 controls syntax: <[V4L2_CID_]control_name_or_id>[+][=value|?|#][,...]\n"
 		"where control_name_or_id is either symbolic name or numerical id.\n"
@@ -1170,6 +1172,61 @@ static void vidioc_querybuf(void)
 	}
 }
 
+static void capture_buffer_stats(void *image, struct v4l2_format *format)
+{
+	static const int BPP = 2;
+	static const int NUM = 0;
+	static const int SUM = 1;
+	static const int MIN = 2;
+	static const int MAX = 3;
+	long long stat[4][4];
+	int y, x, p, stride;
+	unsigned char *line;
+
+	if (!vars.calculate_stats)
+		return;
+
+	if (format->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
+		error("bad buffer type for statistics");
+
+	switch (format->fmt.pix.pixelformat) {
+	case V4L2_PIX_FMT_SBGGR10:
+	case V4L2_PIX_FMT_SGBRG10:
+	case V4L2_PIX_FMT_SGRBG10:
+	case V4L2_PIX_FMT_SRGGB10:
+		break;
+	default:
+		error("not supported format for statistics");
+	}
+
+	for (p = 0; p < 4; p++) {
+		stat[p][NUM] = 0;
+		stat[p][SUM] = 0;
+		stat[p][MIN] = INT_MAX;
+		stat[p][MAX] = 0;
+	}
+
+	stride = format->fmt.pix.bytesperline;
+	line = image;
+	for (y = 0; y < format->fmt.pix.height; y++) {
+		unsigned char *ptr = line;
+		for (x = 0; x < format->fmt.pix.width; x++) {
+			int v = ptr[0] | (ptr[1] << 8);
+			p = ((y & 1) << 1) | (x & 1);
+			stat[p][NUM]++;
+			stat[p][SUM] += v;
+			stat[p][MIN] = MIN(stat[p][MIN], v);
+			stat[p][MAX] = MAX(stat[p][MAX], v);
+			ptr += BPP;
+		}
+		line += stride;
+	}
+
+	for (p = 0; p < 4; p++)
+		print(0, "STATISTICS[%i] %.3f %i %i %i\n", p,
+			(double)stat[p][SUM] / stat[p][NUM], (int)stat[p][MIN], (int)stat[p][MAX]);
+}
+
 static void capture_buffer_save(void *image, struct v4l2_format *format, struct v4l2_buffer *buffer)
 {
 	struct capture_buffer *cb;
@@ -1225,6 +1282,7 @@ static void vidioc_dqbuf(void)
 		print(1, "warning: Bad buffer size %i (querybuf %i)\n",
 		      b.bytesused, vars.ring_buffers[i].querybuf.length);
 
+	capture_buffer_stats(vars.ring_buffers[i].start, &vars.format);
 	capture_buffer_save(vars.ring_buffers[i].start, &vars.format, &b);
 	vars.ring_buffers[i].queued = FALSE;
 }
@@ -1717,6 +1775,7 @@ static void process_options(int argc, char *argv[])
 			{ "wait", 2, NULL, 'w' },
 			{ "waitkey", 0, NULL, 1009 },
 			{ "shell", 1, NULL, 1007 },
+			{ "statistics", 0, NULL, 1013 },
 			{ 0, 0, 0, 0 }
 		};
 
@@ -1868,6 +1927,10 @@ static void process_options(int argc, char *argv[])
 
 		case 1007:	/* --shell */
 			shell(optarg);
+			break;
+
+		case 1013:	/* --statistics */
+			vars.calculate_stats = TRUE;
 			break;
 
 		default:
