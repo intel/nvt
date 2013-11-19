@@ -981,6 +981,21 @@ static void vidioc_parm(const char *s)
 	}
 }
 
+static void print_v4l2_format(int v, struct v4l2_format *f, char c)
+{
+	print(v, "%c type:          %s\n", c, symbol_str(f->type, v4l2_buf_types));
+	if (f->type == V4L2_BUF_TYPE_VIDEO_CAPTURE) {
+		print(v, "%c width:         %i\n", c, f->fmt.pix.width);
+		print(v, "%c height:        %i\n", c, f->fmt.pix.height);
+		print(v, "%c pixelformat:   %s\n", c, symbol_str(f->fmt.pix.pixelformat, pixelformats));
+		print(v, "%c field:         %i\n", c, f->fmt.pix.field);
+		print(v, "%c bytesperline:  %i\n", c, f->fmt.pix.bytesperline);
+		print(v, "%c sizeimage:     %i\n", c, f->fmt.pix.sizeimage);
+		print(v, "%c colorspace:    %i\n", c, f->fmt.pix.colorspace);
+		print(v, "%c priv:          %i\n", c, f->fmt.pix.priv);
+	}
+}
+
 static void vidioc_fmt(bool try, const char *s)
 {
 	static const struct token_list list[] = {
@@ -1023,24 +1038,11 @@ static void vidioc_fmt(bool try, const char *s)
 		xioctl(VIDIOC_G_FMT, &p);
 	} else {
 		print(1, "VIDIOC_S_FMT\n");
-	}
-
-	print(2, ": type:          %s\n", symbol_str(p.type, v4l2_buf_types));
-	if (p.type == V4L2_BUF_TYPE_VIDEO_CAPTURE) {
-		print(2, ": width:         %i\n", p.fmt.pix.width);
-		print(2, ": height:        %i\n", p.fmt.pix.height);
-		print(2, ": pixelformat:   %s\n", symbol_str(p.fmt.pix.pixelformat, pixelformats));
-		print(2, ": field:         %i\n", p.fmt.pix.field);
-		print(2, ": bytesperline:  %i\n", p.fmt.pix.bytesperline);
-		print(2, ": sizeimage:     %i\n", p.fmt.pix.sizeimage);
-		print(2, ": colorspace:    %i\n", p.fmt.pix.colorspace);
-		print(2, ": priv:          %i\n", p.fmt.pix.priv);
-	}
-
-	if (!try && *s != '?') {
+		print_v4l2_format(3, &p, '<');
 		xioctl(VIDIOC_S_FMT, &p);
 		vars.format = p;
 	}
+	print_v4l2_format(2, &p, '>');
 }
 
 static void vidioc_reqbufs(const char *s)
