@@ -80,7 +80,7 @@ static struct {
 } vars = {
 	.verbosity = 2,
 	.fd = -1,
-	.save_images = TRUE,
+	.save_images = FALSE,
 	.reqbufs.count = 2,
 	.reqbufs.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
 	.reqbufs.memory = V4L2_MEMORY_USERPTR,
@@ -1834,6 +1834,7 @@ static void process_options(int argc, char *argv[])
 
 		case 'o':
 			vars.output = strdup(optarg);
+			vars.save_images = TRUE;
 			if (!vars.output) error("out of memory");
 			break;
 
