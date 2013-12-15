@@ -21,6 +21,7 @@
 #define USE_ATOMISP	1
 
 #if USE_ATOMISP
+#define CONFIG_VIDEO_ATOMISP_CSS20
 #include "linux/atomisp.h"
 #endif
 
@@ -577,6 +578,15 @@ static void error(char *msg, ...)
 	exit(1);
 }
 
+static void *zalloc(int size)
+{
+	void *p = malloc(size);
+	if (p == NULL)
+		error("malloc failed");
+	memset(p, 0, size);
+	return p;
+}
+
 #define xioctl(io, arg) xioctl_(#io, io, arg)
 
 static void xioctl_(char *ios, int ion, void *arg)
@@ -639,6 +649,7 @@ static void usage(void)
 		"--isp_dump=addr,len\n"
 		"		Dump ISP memory to kernel log\n"
 		"--cvf_parm	Set continuous vf parameters [num_captures,skip_frames,offset]\n"
+		"--parameters	Set ISP image processing parameters\n"
 		"--ctrl-list	List supported V4L2 controls\n"
 		"--ctrl=$	Request given V4L2 controls\n"
 		"--fmt-list	List supported pixel formats\n"
@@ -744,7 +755,7 @@ static int token_get(const struct token_list *list, const char **token, int val[
 
 	CLEAR(*val);
 	end = start = *token;
-	while (isalpha(*end) || *end == '.') end++;
+	while (isalpha(*end) || *end == '_' || *end == '.') end++;
 	if (start == end)
 		error("zero-length token");
 	for (i=0; list[i].token!=NULL; i++) {
@@ -1702,6 +1713,62 @@ static void atomisp_ioc_s_cvf_params(const char *arg)
 		cvf_parm.offset);
 	xioctl(ATOMISP_IOC_S_CONT_CAPTURE_CONFIG, &cvf_parm);
 }
+
+static void atomisp_ioc_s_parameters(const char *s)
+{
+	static const struct token_list list[] = {
+		{ 'i', TOKEN_F_ARG, "wb_config.integer_bits", NULL },
+		{ 'R', TOKEN_F_ARG, "wb_config.gr", NULL },
+		{ 'r', TOKEN_F_ARG, "wb_config.r", NULL },
+		{ 'b', TOKEN_F_ARG, "wb_config.b", NULL },
+		{ 'B', TOKEN_F_ARG, "wb_config.gb", NULL },
+		TOKEN_END
+	};
+	struct atomisp_parameters p;
+	CLEAR(p);
+
+	while (*s && *s!='?') {
+		int val[4];
+		int t = token_get(list, &s, val);
+		switch (t) {	/* Allocate structure if needed */
+		case 'R':
+		case 'r':
+		case 'b':
+		case 'B':
+		case 'i':
+			if (!p.wb_config) {
+				p.wb_config = zalloc(sizeof(*p.wb_config));
+				p.wb_config->integer_bits = 1;
+				p.wb_config->gr = 32768;
+				p.wb_config->r  = 32768;
+				p.wb_config->b  = 32768;
+				p.wb_config->gb = 32768;
+			}
+			break;
+		}
+		switch (t) {	/* Fill structure */
+		case 'R': p.wb_config->gr = val[0]; break;
+		case 'r': p.wb_config->r = val[0]; break;
+		case 'b': p.wb_config->b = val[0]; break;
+		case 'B': p.wb_config->gb = val[0]; break;
+		case 'i': p.wb_config->integer_bits = val[0]; break;
+		}
+	}
+
+	print(1, "ATOMISP_IOC_S_PARAMETERS\n");
+	if (p.wb_config) {
+		print(2, "< wb_config->gr:              %i\n", p.wb_config->gr);
+		print(2, "< wb_config->r:               %i\n", p.wb_config->r);
+		print(2, "< wb_config->b:               %i\n", p.wb_config->b);
+		print(2, "< wb_config->gb:              %i\n", p.wb_config->gb);
+		print(2, "< wb_config->integer_bits:    %i\n", p.wb_config->integer_bits);
+	} else {
+		print(2, "< wb_config: NULL\n");
+	}
+	xioctl(ATOMISP_IOC_S_PARAMETERS, &p);
+	free(p.wb_config);
+}
+
 #endif
 
 static void delay(double t)
@@ -1771,6 +1838,7 @@ static void process_options(int argc, char *argv[])
 			{ "motor_priv_data", 2, NULL, 1010 },
 			{ "isp_dump", 1, NULL, 9999 },
 			{ "cvf_parm", 1, NULL, 1012 },
+			{ "parameters", 1, NULL, 1014 },
 			{ "ctrl-list", 0, NULL, 1003 },
 			{ "fmt-list", 0, NULL, 1004 },
 			{ "ctrl", 1, NULL, 'c' },
@@ -1902,6 +1970,10 @@ static void process_options(int argc, char *argv[])
 
 		case 1012:	/* --cvf_parm */
 			atomisp_ioc_s_cvf_params(optarg);
+			break;
+
+		case 1014:	/* --parameters, ATOMISP_IOC_S_PARAMETERS */
+			atomisp_ioc_s_parameters(optarg);
 			break;
 #endif
 
