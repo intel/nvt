@@ -1855,20 +1855,20 @@ static void atomisp_ioc_s_parameters(const char *s)
 		case 'W'<<8 | 'r': wb_config.r = val[0]; break;
 		case 'W'<<8 | 'b': wb_config.b = val[0]; break;
 		case 'W'<<8 | 'B': wb_config.gb = val[0]; break;
+		case 'T'<<8 | 'g': tnr_config.gain = val[0]; break;
+		case 'T'<<8 | 'y': tnr_config.threshold_y = val[0]; break;
+		case 'T'<<8 | 'u': tnr_config.threshold_uv = val[0]; break;
+		case 'R'<<8 | 'b': nr_config.bnr_gain = val[0]; break;
+		case 'R'<<8 | 'y': nr_config.ynr_gain = val[0]; break;
+		case 'R'<<8 | 'd': nr_config.direction = val[0]; break;
+		case 'R'<<8 | 't': nr_config.threshold_cb = val[0]; break;
+		case 'R'<<8 | 'g': nr_config.threshold_cr = val[0]; break;
 		case 'G'<<8 | 'g': ee_config.gain = val[0]; break;
 		case 'G'<<8 | 't': ee_config.threshold = val[0]; break;
 		case 'G'<<8 | 'd': ee_config.detail_gain = val[0]; break;
 		case 'S'<<8 | 'p': de_config.pixelnoise = val[0]; break;
 		case 'S'<<8 | '1': de_config.c1_coring_threshold = val[0]; break;
 		case 'S'<<8 | '2': de_config.c2_coring_threshold = val[0]; break;
-		case 'R'<<8 | 'b': nr_config.bnr_gain = val[0]; break;
-		case 'R'<<8 | 'y': nr_config.ynr_gain = val[0]; break;
-		case 'R'<<8 | 'd': nr_config.direction = val[0]; break;
-		case 'R'<<8 | 't': nr_config.threshold_cb = val[0]; break;
-		case 'R'<<8 | 'g': nr_config.threshold_cr = val[0]; break;
-		case 'T'<<8 | 'g': tnr_config.gain = val[0]; break;
-		case 'T'<<8 | 'y': tnr_config.threshold_y = val[0]; break;
-		case 'T'<<8 | 'u': tnr_config.threshold_uv = val[0]; break;
 		}
 	}
 
@@ -1880,6 +1880,18 @@ static void atomisp_ioc_s_parameters(const char *s)
 		print(2, "< wb_config->b:               %i\n", p.wb_config->b);
 		print(2, "< wb_config->gb:              %i\n", p.wb_config->gb);
 	} else  print(2, "< wb_config: NULL\n");
+	if (p.tnr_config) {
+		print(2, "< tnr_config->gain:           %i\n", p.tnr_config->gain);
+		print(2, "< tnr_config->threshold_y:    %i\n", p.tnr_config->threshold_y);
+		print(2, "< tnr_config->threshold_uv:   %i\n", p.tnr_config->threshold_uv);
+	} else  print(2, "< tnr_config: NULL\n");
+	if (p.nr_config) {
+		print(2, "< nr_config->bnr_gain:        %i\n", p.nr_config->bnr_gain);
+		print(2, "< nr_config->ynr_gain:        %i\n", p.nr_config->ynr_gain);
+		print(2, "< nr_config->direction:       %i\n", p.nr_config->direction);
+		print(2, "< nr_config->threshold_cb:    %i\n", p.nr_config->threshold_cb);
+		print(2, "< nr_config->threshold_cr:    %i\n", p.nr_config->threshold_cr);
+	} else  print(2, "< nr_config: NULL\n");
 	if (p.ee_config) {
 		print(2, "< ee_config->gain:            %i\n", p.ee_config->gain);
 		print(2, "< ee_config->threshold:       %i\n", p.ee_config->threshold);
@@ -1890,18 +1902,6 @@ static void atomisp_ioc_s_parameters(const char *s)
 		print(2, "< de_config->c1_coring_threshold: %i\n", p.de_config->c1_coring_threshold);
 		print(2, "< de_config->c2_coring_threshold: %i\n", p.de_config->c1_coring_threshold);
 	} else  print(2, "< de_config: NULL\n");
-	if (p.nr_config) {
-		print(2, "< nr_config->bnr_gain:        %i\n", p.nr_config->bnr_gain);
-		print(2, "< nr_config->ynr_gain:        %i\n", p.nr_config->ynr_gain);
-		print(2, "< nr_config->direction:       %i\n", p.nr_config->direction);
-		print(2, "< nr_config->threshold_cb:    %i\n", p.nr_config->threshold_cb);
-		print(2, "< nr_config->threshold_cr:    %i\n", p.nr_config->threshold_cr);
-	} else  print(2, "< nr_config: NULL\n");
-	if (p.tnr_config) {
-		print(2, "< tnr_config->gain:           %i\n", p.tnr_config->gain);
-		print(2, "< tnr_config->threshold_y:    %i\n", p.tnr_config->threshold_y);
-		print(2, "< tnr_config->threshold_uv:   %i\n", p.tnr_config->threshold_uv);
-	} else  print(2, "< tnr_config: NULL\n");
 	xioctl(ATOMISP_IOC_S_PARAMETERS, &p);
 }
 
