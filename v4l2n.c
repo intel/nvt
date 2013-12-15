@@ -1729,6 +1729,11 @@ static void atomisp_ioc_s_parameters(const char *s)
 		{ 'J' << 8, 0, "ob_config", NULL },
 		{ 'P' << 8, 0, "dp_config", NULL },
 		{ 'R' << 8, 0, "nr_config", NULL },
+		 { 'R'<<8 | 'b', TOKEN_F_ARG, "nr_config.bnr_gain", NULL },
+		 { 'R'<<8 | 'y', TOKEN_F_ARG, "nr_config.ynr_gain", NULL },
+		 { 'R'<<8 | 'd', TOKEN_F_ARG, "nr_config.direction", NULL },
+		 { 'R'<<8 | 't', TOKEN_F_ARG, "nr_config.threshold_cb", NULL },
+		 { 'R'<<8 | 'g', TOKEN_F_ARG, "nr_config.threshold_cr", NULL },
 		{ 'G' << 8, 0, "ee_config", NULL },
 		 { 'G'<<8 | 'g', TOKEN_F_ARG, "ee_config.gain", NULL },
 		 { 'G'<<8 | 't', TOKEN_F_ARG, "ee_config.threshold", NULL },
@@ -1843,6 +1848,11 @@ static void atomisp_ioc_s_parameters(const char *s)
 		case 'G'<<8 | 'g': ee_config.gain = val[0]; break;
 		case 'G'<<8 | 't': ee_config.threshold = val[0]; break;
 		case 'G'<<8 | 'd': ee_config.detail_gain = val[0]; break;
+		case 'R'<<8 | 'b': nr_config.bnr_gain = val[0]; break;
+		case 'R'<<8 | 'y': nr_config.ynr_gain = val[0]; break;
+		case 'R'<<8 | 'd': nr_config.direction = val[0]; break;
+		case 'R'<<8 | 't': nr_config.threshold_cb = val[0]; break;
+		case 'R'<<8 | 'g': nr_config.threshold_cr = val[0]; break;
 		}
 	}
 
@@ -1859,6 +1869,13 @@ static void atomisp_ioc_s_parameters(const char *s)
 		print(2, "< ee_config->threshold:       %i\n", p.ee_config->threshold);
 		print(2, "< ee_config->detail_gain:     %i\n", p.ee_config->detail_gain);
 	} else  print(2, "< ee_config: NULL\n");
+	if (p.nr_config) {
+		print(2, "< nr_config->bnr_gain:        %i\n", p.nr_config->bnr_gain);
+		print(2, "< nr_config->ynr_gain:        %i\n", p.nr_config->ynr_gain);
+		print(2, "< nr_config->direction:       %i\n", p.nr_config->direction);
+		print(2, "< nr_config->threshold_cb:    %i\n", p.nr_config->threshold_cb);
+		print(2, "< nr_config->threshold_cr:    %i\n", p.nr_config->threshold_cr);
+	} else  print(2, "< nr_config: NULL\n");
 	xioctl(ATOMISP_IOC_S_PARAMETERS, &p);
 }
 
