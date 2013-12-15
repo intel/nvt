@@ -1,3 +1,7 @@
+/* v4l2n: V4L2 CLI */
+
+#include "v4l2n.h"
+
 #include <stdio.h>
 #include <errno.h>
 #include <unistd.h>
@@ -1975,7 +1979,7 @@ static void shell(char *cmd)
 	print(1, "Executed `%s', status: %i\n", cmd, status);
 }
 
-static void process_options(int argc, char *argv[])
+int v4l2n_process_commands(int argc, char *argv[])
 {
 	while (1) {
 		static const struct option long_options[] = {
@@ -2019,7 +2023,7 @@ static void process_options(int argc, char *argv[])
 		switch (c) {
 		case 'h':	/* --help, -h */
 			usage();
-			return;
+			return 0;
 
 		case 'v':	/* --verbose, -v */
 			if (optarg) {
@@ -2142,11 +2146,11 @@ static void process_options(int argc, char *argv[])
 
 		case 1003:	/* --ctrl-list */
 			symbol_dump(V4L2_CID, controls);
-			return;
+			return 0;
 
 		case 1004:	/* --fmt-list */
 			symbol_dump(V4L2_PIX_FMT, pixelformats);
-			return;
+			return 0;
 
 		case 'c':	/* --ctrl, -c, VIDIOC_QUERYCTRL / VIDIOC_S/G_CTRL / VIDIOC_S/G_EXT_CTRLS */
 			open_device(NULL);
@@ -2175,6 +2179,8 @@ static void process_options(int argc, char *argv[])
 			error("unknown option");
 		}
 	}
+
+	return 0;
 }
 
 static void capture_buffer_write(struct capture_buffer *cb, char *name, int i)
@@ -2205,7 +2211,16 @@ static void capture_buffer_write(struct capture_buffer *cb, char *name, int i)
 	write_file(b, cb->image, cb->length);
 }
 
-static void cleanup(void)
+int v4l2n_init(void)
+{
+	PAGE_SIZE = getpagesize();
+	PAGE_MASK = ~(PAGE_SIZE - 1);
+	if (gettimeofday(&vars.start_time, NULL) < 0) error("getting start time failed");
+
+	return 0;
+}
+
+int v4l2n_cleanup(void)
 {
 	int i;
 
@@ -2224,16 +2239,18 @@ static void cleanup(void)
 	}
 	close_device();
 	free(vars.output);
+
+	return 0;
 }
 
-int main(int argc, char *argv[])
+__attribute__((weak)) int main(int argc, char *argv[])
 {
 	print(1, "Starting %s\n", name);
 	name = argv[0];
-	PAGE_SIZE = getpagesize();
-	PAGE_MASK = ~(PAGE_SIZE - 1);
-	if (gettimeofday(&vars.start_time, NULL) < 0) error("getting start time failed");
-	process_options(argc, argv);
-	cleanup();
+	if (v4l2n_init() < 0) error("v4l2n_init failed");
+	if (v4l2n_process_commands(argc, argv) < 0) error("v4l2n_process_commands failed");
+	if (v4l2n_cleanup() < 0) error("v4l2n_cleanup failed");
 	return 0;
 }
+
+/* EOF */

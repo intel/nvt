@@ -1,11 +1,15 @@
 OPT = -Wall -m32 -static -g -I.
-PROGS = v4l2n raw2pnm yuv2yuv txt2raw pnm2txt
+PROGS = v4l2n v4l2n-example raw2pnm yuv2yuv txt2raw pnm2txt
 
 .PHONY: all clean
 all: $(PROGS)
 
-v4l2n: v4l2n.c linux/videodev2.h linux/v4l2-controls.h linux/v4l2-common.h linux/compiler.h linux/atomisp.h
-	gcc $(OPT) $@.c -o $@
+v4l2n: v4l2n.c v4l2n.h linux/videodev2.h linux/v4l2-controls.h linux/v4l2-common.h linux/compiler.h linux/atomisp.h
+	gcc -c $(OPT) $@.c -o lib$@.o
+	gcc $(OPT) lib$@.o -o $@
+
+v4l2n-example: v4l2n
+	gcc $(OPT) $@.c -o $@ libv4l2n.o
 
 raw2pnm: raw2pnm.c
 	gcc $(OPT) $@.c -o $@
