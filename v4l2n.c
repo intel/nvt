@@ -1730,6 +1730,9 @@ static void atomisp_ioc_s_parameters(const char *s)
 		{ 'P' << 8, 0, "dp_config", NULL },
 		{ 'R' << 8, 0, "nr_config", NULL },
 		{ 'G' << 8, 0, "ee_config", NULL },
+		 { 'G'<<8 | 'g', TOKEN_F_ARG, "ee_config.gain", NULL },
+		 { 'G'<<8 | 't', TOKEN_F_ARG, "ee_config.threshold", NULL },
+		 { 'G'<<8 | 'd', TOKEN_F_ARG, "ee_config.detail_gain", NULL },
 		{ 'S' << 8, 0, "de_config", NULL },
 		{ 'I' << 8, 0, "gc_config", NULL },
 //		{ 'V' << 8, 0, "anr_config", NULL },
@@ -1777,7 +1780,11 @@ static void atomisp_ioc_s_parameters(const char *s)
 	struct atomisp_ob_config	ob_config = { };
 	struct atomisp_dp_config	dp_config = { };
 	struct atomisp_nr_config	nr_config = { };
-	struct atomisp_ee_config	ee_config = { };
+	struct atomisp_ee_config	ee_config = {
+		.gain		= 0,
+		.threshold	= 65535,
+		.detail_gain	= 0,
+	};
 	struct atomisp_de_config	de_config = { };
 	struct atomisp_gc_config	gc_config = { };
 //	struct atomisp_anr_config	anr_config = { };
@@ -1833,6 +1840,9 @@ static void atomisp_ioc_s_parameters(const char *s)
 		case 'W'<<8 | 'r': wb_config.r = val[0]; break;
 		case 'W'<<8 | 'b': wb_config.b = val[0]; break;
 		case 'W'<<8 | 'B': wb_config.gb = val[0]; break;
+		case 'G'<<8 | 'g': ee_config.gain = val[0]; break;
+		case 'G'<<8 | 't': ee_config.threshold = val[0]; break;
+		case 'G'<<8 | 'd': ee_config.detail_gain = val[0]; break;
 		}
 	}
 
@@ -1843,9 +1853,12 @@ static void atomisp_ioc_s_parameters(const char *s)
 		print(2, "< wb_config->r:               %i\n", p.wb_config->r);
 		print(2, "< wb_config->b:               %i\n", p.wb_config->b);
 		print(2, "< wb_config->gb:              %i\n", p.wb_config->gb);
-	} else {
-		print(2, "< wb_config: NULL\n");
-	}
+	} else  print(2, "< wb_config: NULL\n");
+	if (p.ee_config) {
+		print(2, "< ee_config->gain:            %i\n", p.ee_config->gain);
+		print(2, "< ee_config->threshold:       %i\n", p.ee_config->threshold);
+		print(2, "< ee_config->detail_gain:     %i\n", p.ee_config->detail_gain);
+	} else  print(2, "< ee_config: NULL\n");
 	xioctl(ATOMISP_IOC_S_PARAMETERS, &p);
 }
 
