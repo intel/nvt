@@ -1731,6 +1731,8 @@ static void atomisp_ioc_s_parameters(const char *s)
 		{ 'D' << 8, 0, "dvs_6axis_config", NULL },
 		{ 'J' << 8, 0, "ob_config", NULL },
 		{ 'P' << 8, 0, "dp_config", NULL },
+		 { 'P'<<8 | 't', TOKEN_F_ARG, "dp_config.threshold", NULL },
+		 { 'P'<<8 | 'g', TOKEN_F_ARG, "dp_config.gain", NULL },
 		{ 'R' << 8, 0, "nr_config", NULL },
 		 { 'R'<<8 | 'b', TOKEN_F_ARG, "nr_config.bnr_gain", NULL },
 		 { 'R'<<8 | 'y', TOKEN_F_ARG, "nr_config.ynr_gain", NULL },
@@ -1794,7 +1796,10 @@ static void atomisp_ioc_s_parameters(const char *s)
 	struct atomisp_ce_config	ce_config = { };
 	struct atomisp_dvs_6axis_config	dvs_6axis_config = { };
 	struct atomisp_ob_config	ob_config = { };
-	struct atomisp_dp_config	dp_config = { };
+	struct atomisp_dp_config	dp_config = {
+		.threshold	= 0xFFFF,
+		.gain		= 0xFFFF,
+	};
 	struct atomisp_nr_config	nr_config = { };
 	struct atomisp_ee_config	ee_config = {
 		.gain		= 0,
@@ -1859,6 +1864,8 @@ static void atomisp_ioc_s_parameters(const char *s)
 		case 'T'<<8 | 'g': tnr_config.gain = val[0]; break;
 		case 'T'<<8 | 'y': tnr_config.threshold_y = val[0]; break;
 		case 'T'<<8 | 'u': tnr_config.threshold_uv = val[0]; break;
+		case 'P'<<8 | 't': dp_config.threshold = val[0]; break;
+		case 'P'<<8 | 'g': dp_config.gain = val[0]; break;
 		case 'R'<<8 | 'b': nr_config.bnr_gain = val[0]; break;
 		case 'R'<<8 | 'y': nr_config.ynr_gain = val[0]; break;
 		case 'R'<<8 | 'd': nr_config.direction = val[0]; break;
@@ -1887,6 +1894,10 @@ static void atomisp_ioc_s_parameters(const char *s)
 		print(2, "< tnr_config->threshold_y:    %i\n", p.tnr_config->threshold_y);
 		print(2, "< tnr_config->threshold_uv:   %i\n", p.tnr_config->threshold_uv);
 	} else  print(2, "< tnr_config: NULL\n");
+	if (p.dp_config) {
+		print(2, "< dp_config->threshold:       %i\n", p.dp_config->threshold);
+		print(2, "< dp_config->gain:            %i\n", p.dp_config->gain);
+	} else  print(2, "< dp_config: NULL\n");
 	if (p.nr_config) {
 		print(2, "< nr_config->bnr_gain:        %i\n", p.nr_config->bnr_gain);
 		print(2, "< nr_config->ynr_gain:        %i\n", p.nr_config->ynr_gain);
