@@ -1742,6 +1742,9 @@ static void atomisp_ioc_s_parameters(const char *s)
 		 { 'G'<<8 | 't', TOKEN_F_ARG, "ee_config.threshold", NULL },
 		 { 'G'<<8 | 'd', TOKEN_F_ARG, "ee_config.detail_gain", NULL },
 		{ 'S' << 8, 0, "de_config", NULL },
+		 { 'S'<<8 | 'p', TOKEN_F_ARG, "de_config.pixelnoise", NULL },
+		 { 'S'<<8 | '1', TOKEN_F_ARG, "de_config.c1_coring_threshold", NULL },
+		 { 'S'<<8 | '2', TOKEN_F_ARG, "de_config.c2_coring_threshold", NULL },
 		{ 'I' << 8, 0, "gc_config", NULL },
 //		{ 'V' << 8, 0, "anr_config", NULL },
 		{ 'K' << 8, 0, "a3a_config", NULL },
@@ -1855,6 +1858,9 @@ static void atomisp_ioc_s_parameters(const char *s)
 		case 'G'<<8 | 'g': ee_config.gain = val[0]; break;
 		case 'G'<<8 | 't': ee_config.threshold = val[0]; break;
 		case 'G'<<8 | 'd': ee_config.detail_gain = val[0]; break;
+		case 'S'<<8 | 'p': de_config.pixelnoise = val[0]; break;
+		case 'S'<<8 | '1': de_config.c1_coring_threshold = val[0]; break;
+		case 'S'<<8 | '2': de_config.c2_coring_threshold = val[0]; break;
 		case 'R'<<8 | 'b': nr_config.bnr_gain = val[0]; break;
 		case 'R'<<8 | 'y': nr_config.ynr_gain = val[0]; break;
 		case 'R'<<8 | 'd': nr_config.direction = val[0]; break;
@@ -1879,6 +1885,11 @@ static void atomisp_ioc_s_parameters(const char *s)
 		print(2, "< ee_config->threshold:       %i\n", p.ee_config->threshold);
 		print(2, "< ee_config->detail_gain:     %i\n", p.ee_config->detail_gain);
 	} else  print(2, "< ee_config: NULL\n");
+	if (p.de_config) {
+		print(2, "< de_config->pixelnoise:      %i\n", p.de_config->pixelnoise);
+		print(2, "< de_config->c1_coring_threshold: %i\n", p.de_config->c1_coring_threshold);
+		print(2, "< de_config->c2_coring_threshold: %i\n", p.de_config->c1_coring_threshold);
+	} else  print(2, "< de_config: NULL\n");
 	if (p.nr_config) {
 		print(2, "< nr_config->bnr_gain:        %i\n", p.nr_config->bnr_gain);
 		print(2, "< nr_config->ynr_gain:        %i\n", p.nr_config->ynr_gain);
