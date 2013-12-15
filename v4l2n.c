@@ -1749,6 +1749,7 @@ static void atomisp_ioc_s_parameters(const char *s)
 //		{ 'V' << 8, 0, "anr_config", NULL },
 		{ 'K' << 8, 0, "a3a_config", NULL },
 		{ 'X' << 8, 0, "xnr_config", NULL },
+		 { 'X'<<8 | 't', TOKEN_F_ARG, "xnr_config.threshold", NULL },
 //		{ 'Z' << 8, 0, "dz_config", NULL },
 		{ 'U' << 8, 0, "yuv2rgb_cc_config", NULL },
 		{ 'H' << 8, 0, "rgb2yuv_cc_config", NULL },
@@ -1869,6 +1870,7 @@ static void atomisp_ioc_s_parameters(const char *s)
 		case 'S'<<8 | 'p': de_config.pixelnoise = val[0]; break;
 		case 'S'<<8 | '1': de_config.c1_coring_threshold = val[0]; break;
 		case 'S'<<8 | '2': de_config.c2_coring_threshold = val[0]; break;
+		case 'X'<<8 | 't': xnr_config.threshold = val[0]; break;
 		}
 	}
 
@@ -1902,6 +1904,9 @@ static void atomisp_ioc_s_parameters(const char *s)
 		print(2, "< de_config->c1_coring_threshold: %i\n", p.de_config->c1_coring_threshold);
 		print(2, "< de_config->c2_coring_threshold: %i\n", p.de_config->c1_coring_threshold);
 	} else  print(2, "< de_config: NULL\n");
+	if (p.xnr_config) {
+		print(2, "< xnr_config->threshold:      %i\n", p.xnr_config->threshold);
+	} else  print(2, "< xnr_config: NULL\n");
 	xioctl(ATOMISP_IOC_S_PARAMETERS, &p);
 }
 
