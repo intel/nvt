@@ -94,7 +94,7 @@ struct symbol_list {
 #define SYMBOL_END	{ -1, NULL }
 
 struct token_list {
-	char id;
+	int id;
 	int flags;
 	const char *token;
 	const struct symbol_list *symbols;
