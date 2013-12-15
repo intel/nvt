@@ -1728,6 +1728,8 @@ static void atomisp_ioc_s_parameters(const char *s)
 //		{ 'A' << 8, 0, "aa_config", NULL },
 //		{ 'B' << 8, 0, "baa_config", NULL },
 		{ 'Q' << 8, 0, "ce_config", NULL },
+		 { 'Q'<<8 | 'i', TOKEN_F_ARG, "ce_config.uv_level_min", NULL },
+		 { 'Q'<<8 | 'a', TOKEN_F_ARG, "ce_config.uv_level_max", NULL },
 		{ 'D' << 8, 0, "dvs_6axis_config", NULL },
 		{ 'J' << 8, 0, "ob_config", NULL },
 		{ 'P' << 8, 0, "dp_config", NULL },
@@ -1793,7 +1795,10 @@ static void atomisp_ioc_s_parameters(const char *s)
 //	struct atomisp_ctc_config	ctc_config = { };
 //	struct atomisp_aa_config	aa_config = { };
 //	struct atomisp_aa_config	baa_config = { };
-	struct atomisp_ce_config	ce_config = { };
+	struct atomisp_ce_config	ce_config = {
+		.uv_level_min	= 0,
+		.uv_level_max	= 255,
+	};
 	struct atomisp_dvs_6axis_config	dvs_6axis_config = { };
 	struct atomisp_ob_config	ob_config = { };
 	struct atomisp_dp_config	dp_config = {
@@ -1864,6 +1869,8 @@ static void atomisp_ioc_s_parameters(const char *s)
 		case 'T'<<8 | 'g': tnr_config.gain = val[0]; break;
 		case 'T'<<8 | 'y': tnr_config.threshold_y = val[0]; break;
 		case 'T'<<8 | 'u': tnr_config.threshold_uv = val[0]; break;
+		case 'Q'<<8 | 'i': ce_config.uv_level_min = val[0]; break;
+		case 'Q'<<8 | 'a': ce_config.uv_level_max = val[0]; break;
 		case 'P'<<8 | 't': dp_config.threshold = val[0]; break;
 		case 'P'<<8 | 'g': dp_config.gain = val[0]; break;
 		case 'R'<<8 | 'b': nr_config.bnr_gain = val[0]; break;
@@ -1894,6 +1901,10 @@ static void atomisp_ioc_s_parameters(const char *s)
 		print(2, "< tnr_config->threshold_y:    %i\n", p.tnr_config->threshold_y);
 		print(2, "< tnr_config->threshold_uv:   %i\n", p.tnr_config->threshold_uv);
 	} else  print(2, "< tnr_config: NULL\n");
+	if (p.ce_config) {
+		print(2, "< ce_config->uv_level_min:    %i\n", p.ce_config->uv_level_min);
+		print(2, "< ce_config->uv_level_max:    %i\n", p.ce_config->uv_level_max);
+	} else  print(2, "< ce_config: NULL\n");
 	if (p.dp_config) {
 		print(2, "< dp_config->threshold:       %i\n", p.dp_config->threshold);
 		print(2, "< dp_config->gain:            %i\n", p.dp_config->gain);
