@@ -20,6 +20,7 @@
 #include <limits.h>
 #include <sys/wait.h>
 #include <stdint.h>
+#include <setjmp.h>
 #include "linux/videodev2.h"
 
 #define USE_ATOMISP	1
@@ -82,6 +83,7 @@ static struct {
 	struct capture_buffer capture_buffers[MAX_CAPTURE_BUFFERS];
 	bool streaming;
 	struct timeval start_time;
+	jmp_buf exception;
 } vars = {
 	.verbosity = 2,
 	.fd = -1,
@@ -579,6 +581,7 @@ static void error(char *msg, ...)
 		fprintf(f, ": %s (%i)", strerror(e), e);
 	fprintf(f, "\n");
 	va_end(ap);
+	longjmp(vars.exception, 1);
 	exit(1);
 }
 
@@ -1981,6 +1984,9 @@ static void shell(char *cmd)
 
 int v4l2n_process_commands(int argc, char *argv[])
 {
+	int ret = setjmp(vars.exception);
+	if (ret) return ret;
+
 	while (1) {
 		static const struct option long_options[] = {
 			{ "help", 0, NULL, 'h' },
@@ -2213,6 +2219,9 @@ static void capture_buffer_write(struct capture_buffer *cb, char *name, int i)
 
 int v4l2n_init(void)
 {
+	int ret = setjmp(vars.exception);
+	if (ret) return ret;
+
 	PAGE_SIZE = getpagesize();
 	PAGE_MASK = ~(PAGE_SIZE - 1);
 	if (gettimeofday(&vars.start_time, NULL) < 0) error("getting start time failed");
@@ -2223,6 +2232,8 @@ int v4l2n_init(void)
 int v4l2n_cleanup(void)
 {
 	int i;
+	int ret = setjmp(vars.exception);
+	if (ret) return ret;
 
 	/* Save images */
 	for (i = 0; i < vars.num_capture_buffers; i++)
@@ -2245,12 +2256,17 @@ int v4l2n_cleanup(void)
 
 __attribute__((weak)) int main(int argc, char *argv[])
 {
+	int ret;
+
 	print(1, "Starting %s\n", name);
 	name = argv[0];
-	if (v4l2n_init() < 0) error("v4l2n_init failed");
-	if (v4l2n_process_commands(argc, argv) < 0) error("v4l2n_process_commands failed");
-	if (v4l2n_cleanup() < 0) error("v4l2n_cleanup failed");
-	return 0;
+	if (v4l2n_init() < 0)
+		return 1;
+	ret = v4l2n_process_commands(argc, argv);
+	if (v4l2n_cleanup() < 0)
+		return 1;
+
+	return ret;
 }
 
 /* EOF */
