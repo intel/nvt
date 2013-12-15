@@ -578,15 +578,6 @@ static void error(char *msg, ...)
 	exit(1);
 }
 
-static void *zalloc(int size)
-{
-	void *p = malloc(size);
-	if (p == NULL)
-		error("malloc failed");
-	memset(p, 0, size);
-	return p;
-}
-
 #define xioctl(io, arg) xioctl_(#io, io, arg)
 
 static void xioctl_(char *ios, int ion, void *arg)
@@ -1717,56 +1708,145 @@ static void atomisp_ioc_s_cvf_params(const char *arg)
 static void atomisp_ioc_s_parameters(const char *s)
 {
 	static const struct token_list list[] = {
-		{ 'i', TOKEN_F_ARG, "wb_config.integer_bits", NULL },
-		{ 'R', TOKEN_F_ARG, "wb_config.gr", NULL },
-		{ 'r', TOKEN_F_ARG, "wb_config.r", NULL },
-		{ 'b', TOKEN_F_ARG, "wb_config.b", NULL },
-		{ 'B', TOKEN_F_ARG, "wb_config.gb", NULL },
+		{ 'W' << 8, 0, "wb_config", NULL },
+		 { 'W'<<8 | 'i', TOKEN_F_ARG, "wb_config.integer_bits", NULL },
+		 { 'W'<<8 | 'R', TOKEN_F_ARG, "wb_config.gr", NULL },
+		 { 'W'<<8 | 'r', TOKEN_F_ARG, "wb_config.r", NULL },
+		 { 'W'<<8 | 'b', TOKEN_F_ARG, "wb_config.b", NULL },
+		 { 'W'<<8 | 'B', TOKEN_F_ARG, "wb_config.gb", NULL },
+		{ 'C' << 8, 0, "cc_config", NULL },
+		{ 'T' << 8, 0, "tnr_config", NULL },
+//		{ 'E' << 8, 0, "ecd_config", NULL },
+//		{ 'Y' << 8, 0, "ynr_config", NULL },
+//		{ 'F' << 8, 0, "fc_config", NULL },
+//		{ 'N' << 8, 0, "cnr_config", NULL },
+		{ 'M' << 8, 0, "macc_config", NULL },
+//		{ 'O' << 8, 0, "ctc_config", NULL },
+//		{ 'A' << 8, 0, "aa_config", NULL },
+//		{ 'B' << 8, 0, "baa_config", NULL },
+		{ 'Q' << 8, 0, "ce_config", NULL },
+		{ 'D' << 8, 0, "dvs_6axis_config", NULL },
+		{ 'J' << 8, 0, "ob_config", NULL },
+		{ 'P' << 8, 0, "dp_config", NULL },
+		{ 'R' << 8, 0, "nr_config", NULL },
+		{ 'G' << 8, 0, "ee_config", NULL },
+		{ 'S' << 8, 0, "de_config", NULL },
+		{ 'I' << 8, 0, "gc_config", NULL },
+//		{ 'V' << 8, 0, "anr_config", NULL },
+		{ 'K' << 8, 0, "a3a_config", NULL },
+		{ 'X' << 8, 0, "xnr_config", NULL },
+//		{ 'Z' << 8, 0, "dz_config", NULL },
+		{ 'U' << 8, 0, "yuv2rgb_cc_config", NULL },
+		{ 'H' << 8, 0, "rgb2yuv_cc_config", NULL },
+		{ 'm' << 8, 0, "macc_table", NULL },
+		{ 'l' << 8, 0, "gamma_table", NULL },
+		{ 'c' << 8, 0, "ctc_table", NULL },
+//		{ 'x' << 8, 0, "xnr_table", NULL },
+//		{ 'r' << 8, 0, "r_gamma_table", NULL },
+//		{ 'g' << 8, 0, "g_gamma_table", NULL },
+//		{ 'b' << 8, 0, "b_gamma_table", NULL },
+//		{ 'o' << 8, 0, "motion_vector", NULL },
+		{ 's' << 8, 0, "shading_table", NULL },
+		{ 'p' << 8, 0, "morph_table", NULL },
+//		{ 'd' << 8, 0, "dvs_coefs", NULL },
+//		{ 'v' << 8, 0, "dvs2_coefs", NULL },
+//		{ 't' << 8, 0, "capture_config", NULL },
+//		{ 'a' << 8, 0, "anr_thres", NULL },
 		TOKEN_END
 	};
-	struct atomisp_parameters p;
-	CLEAR(p);
+	struct atomisp_parameters p = { };
+	struct atomisp_wb_config	wb_config = {
+		.integer_bits	= 1,
+		.gr		= 32768,
+		.r		= 32768,
+		.b		= 32768,
+		.gb		= 32768,
+	};
+	struct atomisp_cc_config	cc_config = { };
+	struct atomisp_tnr_config	tnr_config = { };
+//	struct atomisp_ecd_config	ecd_config = { };
+//	struct atomisp_ynr_config	ynr_config = { };
+//	struct atomisp_fc_config	fc_config = { };
+//	struct atomisp_cnr_config	cnr_config = { };
+	struct atomisp_macc_config	macc_config = { };
+//	struct atomisp_ctc_config	ctc_config = { };
+//	struct atomisp_aa_config	aa_config = { };
+//	struct atomisp_aa_config	baa_config = { };
+	struct atomisp_ce_config	ce_config = { };
+	struct atomisp_dvs_6axis_config	dvs_6axis_config = { };
+	struct atomisp_ob_config	ob_config = { };
+	struct atomisp_dp_config	dp_config = { };
+	struct atomisp_nr_config	nr_config = { };
+	struct atomisp_ee_config	ee_config = { };
+	struct atomisp_de_config	de_config = { };
+	struct atomisp_gc_config	gc_config = { };
+//	struct atomisp_anr_config	anr_config = { };
+	struct atomisp_3a_config	a3a_config = { };
+	struct atomisp_xnr_config	xnr_config = { };
+//	struct atomisp_dz_config	dz_config = { };
+	struct atomisp_cc_config	yuv2rgb_cc_config = { };
+	struct atomisp_cc_config	rgb2yuv_cc_config = { };
+	struct atomisp_macc_table	macc_table = { };
+	struct atomisp_gamma_table	gamma_table = { };
+	struct atomisp_ctc_table	ctc_table = { };
+//	struct atomisp_xnr_table	xnr_table = { };
+//	struct atomisp_rgb_gamma_table	r_gamma_table = { };
+//	struct atomisp_rgb_gamma_table	g_gamma_table = { };
+//	struct atomisp_rgb_gamma_table	b_gamma_table = { };
+//	struct atomisp_vector		motion_vector = { };
+	struct atomisp_shading_table	shading_table = { };
+	struct atomisp_morph_table	morph_table = { };
+//	struct atomisp_dvs_coefficients	dvs_coefs = { };
+//	struct atomisp_dvs2_coefficients dvs2_coefs = { };
+//	struct atomisp_capture_config	capture_config = { };
+//	struct atomisp_anr_thres	anr_thres = { };
 
 	while (*s && *s!='?') {
 		int val[4];
 		int t = token_get(list, &s, val);
-		switch (t) {	/* Allocate structure if needed */
-		case 'R':
-		case 'r':
-		case 'b':
-		case 'B':
-		case 'i':
-			if (!p.wb_config) {
-				p.wb_config = zalloc(sizeof(*p.wb_config));
-				p.wb_config->integer_bits = 1;
-				p.wb_config->gr = 32768;
-				p.wb_config->r  = 32768;
-				p.wb_config->b  = 32768;
-				p.wb_config->gb = 32768;
-			}
-			break;
+		switch (t >> 8) {	/* Set default structure */
+		case 'W': p.wb_config = &wb_config; break;
+		case 'C': p.cc_config = &cc_config; break;
+		case 'T': p.tnr_config = &tnr_config; break;
+		case 'M': p.macc_config = &macc_config; break;
+		case 'Q': p.ce_config = &ce_config; break;
+		case 'D': p.dvs_6axis_config = &dvs_6axis_config; break;
+		case 'J': p.ob_config = &ob_config; break;
+		case 'P': p.dp_config = &dp_config; break;
+		case 'R': p.nr_config = &nr_config; break;
+		case 'G': p.ee_config = &ee_config; break;
+		case 'S': p.de_config = &de_config; break;
+		case 'I': p.gc_config = &gc_config; break;
+		case 'K': p.a3a_config = &a3a_config; break;
+		case 'X': p.xnr_config = &xnr_config; break;
+		case 'U': p.yuv2rgb_cc_config = &yuv2rgb_cc_config; break;
+		case 'H': p.rgb2yuv_cc_config = &rgb2yuv_cc_config; break;
+		case 'm': p.macc_table = &macc_table; break;
+		case 'l': p.gamma_table = &gamma_table; break;
+		case 'c': p.ctc_table = &ctc_table; break;
+		case 's': p.shading_table = &shading_table; break;
+		case 'p': p.morph_table = &morph_table; break;
 		}
-		switch (t) {	/* Fill structure */
-		case 'R': p.wb_config->gr = val[0]; break;
-		case 'r': p.wb_config->r = val[0]; break;
-		case 'b': p.wb_config->b = val[0]; break;
-		case 'B': p.wb_config->gb = val[0]; break;
-		case 'i': p.wb_config->integer_bits = val[0]; break;
+		switch (t) {		/* Fill structure */
+		case 'W'<<8 | 'i': wb_config.integer_bits = val[0]; break;
+		case 'W'<<8 | 'R': wb_config.gr = val[0]; break;
+		case 'W'<<8 | 'r': wb_config.r = val[0]; break;
+		case 'W'<<8 | 'b': wb_config.b = val[0]; break;
+		case 'W'<<8 | 'B': wb_config.gb = val[0]; break;
 		}
 	}
 
 	print(1, "ATOMISP_IOC_S_PARAMETERS\n");
 	if (p.wb_config) {
+		print(2, "< wb_config->integer_bits:    %i\n", p.wb_config->integer_bits);
 		print(2, "< wb_config->gr:              %i\n", p.wb_config->gr);
 		print(2, "< wb_config->r:               %i\n", p.wb_config->r);
 		print(2, "< wb_config->b:               %i\n", p.wb_config->b);
 		print(2, "< wb_config->gb:              %i\n", p.wb_config->gb);
-		print(2, "< wb_config->integer_bits:    %i\n", p.wb_config->integer_bits);
 	} else {
 		print(2, "< wb_config: NULL\n");
 	}
 	xioctl(ATOMISP_IOC_S_PARAMETERS, &p);
-	free(p.wb_config);
 }
 
 #endif
