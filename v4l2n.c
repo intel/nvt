@@ -607,6 +607,16 @@ static int xioctl_try(int ion, void *arg)
 	return 0;
 }
 
+static void *ralloc(void *p, int s)
+{
+	void *r = realloc(p, s);
+	if (r)
+		return r;
+	free(p);
+	error("memory reallocation failed");
+	return NULL;
+}
+
 static void usage(void)
 {
 	print(1,"Usage: %s [-h] [-d device]\n", name);
@@ -657,6 +667,7 @@ static void usage(void)
 		"--waitkey	Wait for character input from stdin\n"
 		"--shell=CMD	Run shell command CMD\n"
 		"--statistics	Calculate statistics from each frame\n"
+		"--file	<name>	Read commands (options) from given file\n"
 		"\n"
 		"List of V4L2 controls syntax: <[V4L2_CID_]control_name_or_id>[+][=value|?|#][,...]\n"
 		"where control_name_or_id is either symbolic name or numerical id.\n"
@@ -1982,8 +1993,62 @@ static void shell(char *cmd)
 	print(1, "Executed `%s', status: %i\n", cmd, status);
 }
 
+static void process_commands(int argc, char *argv[]);
+
+static void process_file(char *name)
+{
+	FILE *f;
+	int argv_max = 16;
+	int argv_size = 1;
+	char **argv;
+	int arg_max;
+	int arg_size;
+	char *arg;
+	int c;
+
+	f = fopen(name, "r");
+	if (!f)
+		error("failed to open `%s'", name);
+	argv = ralloc(NULL, sizeof(*argv) * argv_max);
+	argv[0] = "<none>";
+	do {
+		do {
+			c = getc(f);
+		} while (isspace(c));
+		if (c == EOF)
+			break;
+		arg_max = 16;
+		arg_size = 0;
+		arg = ralloc(NULL, arg_max);
+		do {
+			if (arg_size + 1 >= arg_max) {
+				arg_max *= 2;
+				arg = ralloc(arg, arg_max);
+			}
+			arg[arg_size++] = c;
+			c = getc(f);
+		} while (!isspace(c) && c != EOF);
+		arg[arg_size] = 0;
+		if (argv_size + 1 >= argv_max) {
+			argv_max *= 2;
+			argv = ralloc(argv, sizeof(*argv) * argv_max);
+		}
+		argv[argv_size++] = arg;
+	} while (c != EOF);
+	argv[argv_size] = NULL;
+	fclose(f);
+
+	process_commands(argv_size, argv);
+
+	while (--argv_size > 0) free(argv[argv_size]);
+	free(argv);
+}
+
 static void process_commands(int argc, char *argv[])
 {
+	int saved_optind = optind;
+	optind = 1;
+
 	while (1) {
 		static const struct option long_options[] = {
 			{ "help", 0, NULL, 'h' },
@@ -2016,6 +2081,7 @@ static void process_commands(int argc, char *argv[])
 			{ "waitkey", 0, NULL, 1009 },
 			{ "shell", 1, NULL, 1007 },
 			{ "statistics", 0, NULL, 1013 },
+			{ "file", 1, NULL, 1015 },
 			{ 0, 0, 0, 0 }
 		};
 
@@ -2026,7 +2092,7 @@ static void process_commands(int argc, char *argv[])
 		switch (c) {
 		case 'h':	/* --help, -h */
 			usage();
-			return;
+			break;
 
 		case 'v':	/* --verbose, -v */
 			if (optarg) {
@@ -2149,11 +2215,11 @@ static void process_commands(int argc, char *argv[])
 
 		case 1003:	/* --ctrl-list */
 			symbol_dump(V4L2_CID, controls);
-			return;
+			break;
 
 		case 1004:	/* --fmt-list */
 			symbol_dump(V4L2_PIX_FMT, pixelformats);
-			return;
+			break;
 
 		case 'c':	/* --ctrl, -c, VIDIOC_QUERYCTRL / VIDIOC_S/G_CTRL / VIDIOC_S/G_EXT_CTRLS */
 			open_device(NULL);
@@ -2178,18 +2244,25 @@ static void process_commands(int argc, char *argv[])
 			vars.calculate_stats = TRUE;
 			break;
 
+		case 1015:	/* --file */
+			process_file(optarg);
+			break;
+
 		default:
 			error("unknown option");
 		}
 	}
+	optind = saved_optind;
 }
 
 int v4l2n_process_commands(int argc, char *argv[])
 {
+	int saved_optind = optind;
 	int ret = setjmp(vars.exception);
-	if (ret) return ret;
-	process_commands(argc, argv);
-	return 0;
+	if (!ret)
+		process_commands(argc, argv);
+	optind = saved_optind;
+	return ret;
 }
 
 static void capture_buffer_write(struct capture_buffer *cb, char *name, int i)
