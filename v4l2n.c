@@ -622,8 +622,10 @@ static void usage(void)
 	print(1,"Usage: %s [-h] [-d device]\n", name);
 	print(1,"-h		Show this help\n"
 		"--help\n"
-		"-d		/dev/videoX device node\n"
+		"-d		open /dev/videoX device node\n"
 		"--device\n"
+		"--open\n"
+		"--close	close device node\n"
 		"--querycap	Query device capabilities (VIDIOC_QUERYCAP)\n"
 		"-i		Set/get input device (VIDIOC_S/G_INPUT)\n"
 		"--input\n"
@@ -2054,7 +2056,9 @@ static void process_commands(int argc, char *argv[])
 			{ "help", 0, NULL, 'h' },
 			{ "verbose", 2, NULL, 'v' },
 			{ "quiet", 0, NULL, 'q' },
-			{ "device", 1, NULL, 'd' },
+			{ "device", 1, NULL, 'd' },	/* Synonym for --open for backwards compatibility */
+			{ "open", 1, NULL, 'd' },
+			{ "close", 0, NULL, 1017 },
 			{ "querycap", 0, NULL, 1001 },
 			{ "input", 1, NULL, 'i' },
 			{ "enuminput", 0, NULL, 1005 },
@@ -2107,8 +2111,12 @@ static void process_commands(int argc, char *argv[])
 			vars.verbosity--;
 			break;
 
-		case 'd':	/* --device, -d */
+		case 'd':	/* --device, --open, -d */
 			open_device(optarg);
+			break;
+
+		case 1017:	/* --close */
+			close_device();
 			break;
 
 		case 1001:	/* --querycap */
