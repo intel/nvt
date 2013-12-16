@@ -48,6 +48,7 @@ static unsigned long int PAGE_MASK;
 #define MAX_RING_BUFFERS	20
 #define MAX_CAPTURE_BUFFERS	100
 #define MAX_BUFFER_SIZE		(64*1024*1024)
+#define MAX_PIPES		6
 
 typedef unsigned char bool;
 
@@ -70,28 +71,27 @@ struct capture_buffer {
 	int length;		/* Length of data in the buffer in bytes */
 };
 
-static struct {
-	char *output;
-	int verbosity;
+struct pipe {
 	int fd;
-	bool save_images;
-	bool calculate_stats;
+	char *output;
 	struct v4l2_format format;
 	struct v4l2_requestbuffers reqbufs;
-	struct ring_buffer ring_buffers[MAX_RING_BUFFERS];
 	int num_capture_buffers;
 	struct capture_buffer capture_buffers[MAX_CAPTURE_BUFFERS];
 	bool streaming;
+	bool msg_full_printed;
+};
+
+static struct {
+	int verbosity;
+	bool save_images;
+	bool calculate_stats;
+	struct ring_buffer ring_buffers[MAX_RING_BUFFERS];
 	struct timeval start_time;
 	jmp_buf exception;
-} vars = {
-	.verbosity = 2,
-	.fd = -1,
-	.save_images = FALSE,
-	.reqbufs.count = 2,
-	.reqbufs.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
-	.reqbufs.memory = V4L2_MEMORY_USERPTR,
-};
+	unsigned int pipe;
+	struct pipe pipes[MAX_PIPES];
+} vars;
 
 struct symbol_list {
 	int id;
@@ -589,7 +589,7 @@ static void error(char *msg, ...)
 
 static void xioctl_(char *ios, int ion, void *arg)
 {
-	int fd = vars.fd;
+	int fd = vars.pipes[vars.pipe].fd;
 	int r = ioctl(fd, ion, arg);
 	if (r)
 		error("%s failed on fd %i", ios, fd);
@@ -597,7 +597,7 @@ static void xioctl_(char *ios, int ion, void *arg)
 
 static int xioctl_try(int ion, void *arg)
 {
-	int r = ioctl(vars.fd, ion, arg);
+	int r = ioctl(vars.pipes[vars.pipe].fd, ion, arg);
 	if (r != 0) {
 		int e = -errno;
 		if (e == 0)
@@ -668,6 +668,7 @@ static void usage(void)
 		"--shell=CMD	Run shell command CMD\n"
 		"--statistics	Calculate statistics from each frame\n"
 		"--file	<name>	Read commands (options) from given file\n"
+		"--pipe <n>	Select current pipe to operate on\n"
 		"\n"
 		"List of V4L2 controls syntax: <[V4L2_CID_]control_name_or_id>[+][=value|?|#][,...]\n"
 		"where control_name_or_id is either symbolic name or numerical id.\n"
@@ -912,15 +913,15 @@ static void vidioc_enuminput(void)
 
 static void streamon(bool on)
 {
-	enum v4l2_buf_type t = vars.reqbufs.type;
+	enum v4l2_buf_type t = vars.pipes[vars.pipe].reqbufs.type;
 	print(1, "VIDIOC_STREAM%s (type=%s)\n", on ? "ON" : "OFF", symbol_str(t, v4l2_buf_types));
-	if (vars.streaming == on)
+	if (vars.pipes[vars.pipe].streaming == on)
 		print(0, "warning: streaming is already in this state\n");
 	if (on)
 		xioctl(VIDIOC_STREAMON, &t);
 	else
 		xioctl(VIDIOC_STREAMOFF, &t);
-	vars.streaming = on;
+	vars.pipes[vars.pipe].streaming = on;
 }
 
 static void vidioc_parm(const char *s)
@@ -952,7 +953,7 @@ static void vidioc_parm(const char *s)
 	struct v4l2_streamparm p;
 
 	CLEAR(p);
-	p.type = vars.reqbufs.type;
+	p.type = vars.pipes[vars.pipe].reqbufs.type;
 
 	while (*s && *s!='?') {
 		int val[4];
@@ -1033,7 +1034,7 @@ static void vidioc_fmt(bool try, const char *s)
 	struct v4l2_format p;
 
 	CLEAR(p);
-	p.type = vars.reqbufs.type;
+	p.type = vars.pipes[vars.pipe].reqbufs.type;
 
 	while (*s && *s!='?') {
 		int val[4];
@@ -1060,7 +1061,7 @@ static void vidioc_fmt(bool try, const char *s)
 		print(1, "VIDIOC_S_FMT\n");
 		print_v4l2_format(3, &p, '<');
 		xioctl(VIDIOC_S_FMT, &p);
-		vars.format = p;
+		vars.pipes[vars.pipe].format = p;
 	}
 	print_v4l2_format(2, &p, '>');
 }
@@ -1073,7 +1074,7 @@ static void vidioc_reqbufs(const char *s)
 		{ 'm', TOKEN_F_ARG, "memory", v4l2_memory },
 		TOKEN_END
 	};
-	struct v4l2_requestbuffers *p = &vars.reqbufs;
+	struct v4l2_requestbuffers *p = &vars.pipes[vars.pipe].reqbufs;
 
 	while (*s && *s!='?') {
 		int val[4];
@@ -1150,8 +1151,8 @@ static void vidioc_querybuf_cleanup(void)
 
 static void vidioc_querybuf(void)
 {
-	const enum v4l2_buf_type t = vars.reqbufs.type;
-	const int bufs = vars.reqbufs.count;
+	const enum v4l2_buf_type t = vars.pipes[vars.pipe].reqbufs.type;
+	const int bufs = vars.pipes[vars.pipe].reqbufs.count;
 	int i;
 
 	vidioc_querybuf_cleanup();
@@ -1159,8 +1160,8 @@ static void vidioc_querybuf(void)
 	if (t != V4L2_BUF_TYPE_VIDEO_CAPTURE)
 		error("unsupported operation type");
 
-	if (vars.reqbufs.memory != V4L2_MEMORY_MMAP &&
-	    vars.reqbufs.memory != V4L2_MEMORY_USERPTR)
+	if (vars.pipes[vars.pipe].reqbufs.memory != V4L2_MEMORY_MMAP &&
+	    vars.pipes[vars.pipe].reqbufs.memory != V4L2_MEMORY_USERPTR)
 		error("unsupported memory type");
 
 	if (bufs > MAX_RING_BUFFERS)
@@ -1171,7 +1172,7 @@ static void vidioc_querybuf(void)
 
 		CLEAR(rb->querybuf);
 		rb->querybuf.type = t;
-		rb->querybuf.memory = vars.reqbufs.memory;
+		rb->querybuf.memory = vars.pipes[vars.pipe].reqbufs.memory;
 		rb->querybuf.index = i;
 		print(1, "VIDIOC_QUERYBUF index:%i\n", rb->querybuf.index);
 		xioctl(VIDIOC_QUERYBUF, &rb->querybuf);
@@ -1179,13 +1180,13 @@ static void vidioc_querybuf(void)
 
 		if (rb->querybuf.memory == V4L2_MEMORY_MMAP) {
 			void *p = mmap(NULL, rb->querybuf.length,
-				PROT_READ | PROT_WRITE, MAP_SHARED, vars.fd, rb->querybuf.m.offset);
+				PROT_READ | PROT_WRITE, MAP_SHARED, vars.pipes[vars.pipe].fd, rb->querybuf.m.offset);
 			if (p == MAP_FAILED)
 				error("mmap failed");
 			rb->mmap_p = p;
 			rb->start = p;
 		} else if (rb->querybuf.memory == V4L2_MEMORY_USERPTR) {
-			void *p = malloc(PAGE_ALIGN(vars.format.fmt.pix.sizeimage) + PAGE_SIZE - 1);
+			void *p = malloc(PAGE_ALIGN(vars.pipes[vars.pipe].format.fmt.pix.sizeimage) + PAGE_SIZE - 1);
 			if (p == NULL)
 				error("malloc failed");
 			rb->malloc_p = p;
@@ -1261,16 +1262,15 @@ static void capture_buffer_save(void *image, struct v4l2_format *format, struct 
 	if (!vars.save_images)
 		return;
 
-	if (vars.num_capture_buffers >= MAX_CAPTURE_BUFFERS) {
-		static bool printed = FALSE;
-		if (!printed) {
+	if (vars.pipes[vars.pipe].num_capture_buffers >= MAX_CAPTURE_BUFFERS) {
+		if (!vars.pipes[vars.pipe].msg_full_printed) {
 			print(1, "Buffers full. Not saving the rest\n");
-			printed = TRUE;
+			vars.pipes[vars.pipe].msg_full_printed = TRUE;
 		}
 		return;
 	}
 
-	cb = &vars.capture_buffers[vars.num_capture_buffers++];
+	cb = &vars.pipes[vars.pipe].capture_buffers[vars.pipes[vars.pipe].num_capture_buffers++];
 	cb->pix_format = format->fmt.pix;
 	cb->length = buffer->bytesused;
 	cb->image = malloc(cb->length);
@@ -1281,8 +1281,8 @@ static void capture_buffer_save(void *image, struct v4l2_format *format, struct 
 
 static void vidioc_dqbuf(void)
 {
-	enum v4l2_buf_type t = vars.reqbufs.type;
-	enum v4l2_memory m = vars.reqbufs.memory;
+	enum v4l2_buf_type t = vars.pipes[vars.pipe].reqbufs.type;
+	enum v4l2_memory m = vars.pipes[vars.pipe].reqbufs.memory;
 	struct v4l2_buffer b;
 	int i;
 
@@ -1297,22 +1297,22 @@ static void vidioc_dqbuf(void)
 	if (i < 0 || i >= MAX_RING_BUFFERS)
 		error("index out of range");
 
-	if (b.bytesused > vars.format.fmt.pix.sizeimage)
+	if (b.bytesused > vars.pipes[vars.pipe].format.fmt.pix.sizeimage)
 		error("Bad buffer size %i (sizeimage %i)",
-		      b.bytesused, vars.format.fmt.pix.sizeimage);
+		      b.bytesused, vars.pipes[vars.pipe].format.fmt.pix.sizeimage);
 	if (b.bytesused > vars.ring_buffers[i].querybuf.length)
 		print(1, "warning: Bad buffer size %i (querybuf %i)\n",
 		      b.bytesused, vars.ring_buffers[i].querybuf.length);
 
-	capture_buffer_stats(vars.ring_buffers[i].start, &vars.format);
-	capture_buffer_save(vars.ring_buffers[i].start, &vars.format, &b);
+	capture_buffer_stats(vars.ring_buffers[i].start, &vars.pipes[vars.pipe].format);
+	capture_buffer_save(vars.ring_buffers[i].start, &vars.pipes[vars.pipe].format, &b);
 	vars.ring_buffers[i].queued = FALSE;
 }
 
 static void vidioc_qbuf(void)
 {
-	enum v4l2_buf_type t = vars.reqbufs.type;
-	enum v4l2_memory m = vars.reqbufs.memory;
+	enum v4l2_buf_type t = vars.pipes[vars.pipe].reqbufs.type;
+	enum v4l2_memory m = vars.pipes[vars.pipe].reqbufs.memory;
 	struct v4l2_buffer b;
 	int i;
 
@@ -1328,7 +1328,7 @@ static void vidioc_qbuf(void)
 
 	if (m == V4L2_MEMORY_USERPTR) {
 		b.m.userptr = (unsigned long)vars.ring_buffers[i].start;
-		b.length = vars.format.fmt.pix.sizeimage;
+		b.length = vars.pipes[vars.pipe].format.fmt.pix.sizeimage;
 	} else if (m == V4L2_MEMORY_MMAP) {
 		/* Nothing here */
 	} else error("unsupported capture memory");
@@ -1347,7 +1347,7 @@ static void vidioc_qbuf(void)
  */
 static void capture(int frames)
 {
-	const int bufs = vars.reqbufs.count;
+	const int bufs = vars.pipes[vars.pipe].reqbufs.count;
 	const int tail = MIN(bufs, frames);
 	int i;
 
@@ -1385,10 +1385,10 @@ static void stream(int frames)
 {
 	int i;
 
-	if (!vars.streaming) {
+	if (!vars.pipes[vars.pipe].streaming) {
 		/* Initialize streaming and queue all buffers */
 		vidioc_querybuf();
-		for (i = 0; i < vars.reqbufs.count; i++) {
+		for (i = 0; i < vars.pipes[vars.pipe].reqbufs.count; i++) {
 			vidioc_qbuf();
 		}
 		streamon(TRUE);
@@ -1429,26 +1429,26 @@ static __u32 get_control_id(char *name)
 
 static void close_device()
 {
-	if (vars.fd == -1)
+	if (vars.pipes[vars.pipe].fd == -1)
 		return;
 
-	close(vars.fd);
-	vars.fd = -1;
+	close(vars.pipes[vars.pipe].fd);
+	vars.pipes[vars.pipe].fd = -1;
 	print(1, "CLOSED video device\n");
 }
 
 static void open_device(const char *device)
 {
 	static const char DEFAULT_DEV[] = "/dev/video0";
-	if (device == NULL && vars.fd != -1)
+	if (device == NULL && vars.pipes[vars.pipe].fd != -1)
 		return;
 
 	close_device();
 	if (!device || device[0] == 0)
 		device = DEFAULT_DEV;
 	print(1, "OPEN video device `%s'\n", device);
-	vars.fd = open(device, 0);
-	if (vars.fd == -1)
+	vars.pipes[vars.pipe].fd = open(device, 0);
+	if (vars.pipes[vars.pipe].fd == -1)
 		error("failed to open `%s'", device);
 }
 
@@ -2082,6 +2082,7 @@ static void process_commands(int argc, char *argv[])
 			{ "shell", 1, NULL, 1007 },
 			{ "statistics", 0, NULL, 1013 },
 			{ "file", 1, NULL, 1015 },
+			{ "pipe", 1, NULL, 1016 },
 			{ 0, 0, 0, 0 }
 		};
 
@@ -2137,9 +2138,9 @@ static void process_commands(int argc, char *argv[])
 			break;
 
 		case 'o':
-			vars.output = strdup(optarg);
+			vars.pipes[vars.pipe].output = strdup(optarg);
+			if (!vars.pipes[vars.pipe].output) error("out of memory");
 			vars.save_images = TRUE;
-			if (!vars.output) error("out of memory");
 			break;
 
 		case 'p':	/* --parm, -p, VIDIOC_S/G_PARM */
@@ -2248,6 +2249,13 @@ static void process_commands(int argc, char *argv[])
 			process_file(optarg);
 			break;
 
+		case 1016:	/* --pipe */
+			vars.pipe = atoi(optarg);
+			if (vars.pipe >= MAX_PIPES)
+				error("Maximum of %i pipes available", MAX_PIPES);
+			print(1, "Selected pipe %i\n", vars.pipe);
+			break;
+
 		default:
 			error("unknown option");
 		}
@@ -2295,12 +2303,23 @@ static void capture_buffer_write(struct capture_buffer *cb, char *name, int i)
 
 int v4l2n_init(void)
 {
+	int i;
 	int ret = setjmp(vars.exception);
 	if (ret) return ret;
 
 	PAGE_SIZE = getpagesize();
 	PAGE_MASK = ~(PAGE_SIZE - 1);
+
+	memset(&vars, 0, sizeof(vars));
 	if (gettimeofday(&vars.start_time, NULL) < 0) error("getting start time failed");
+	vars.verbosity = 2;
+
+	for (i = 0; i < MAX_PIPES; i++) {
+		vars.pipes[i].fd = -1;
+		vars.pipes[i].reqbufs.count = 2;
+		vars.pipes[i].reqbufs.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+		vars.pipes[i].reqbufs.memory = V4L2_MEMORY_USERPTR;
+	}
 
 	return 0;
 }
@@ -2311,21 +2330,25 @@ int v4l2n_cleanup(void)
 	int ret = setjmp(vars.exception);
 	if (ret) return ret;
 
-	/* Save images */
-	for (i = 0; i < vars.num_capture_buffers; i++)
-		capture_buffer_write(&vars.capture_buffers[i], vars.output, i);
-
-	/* Stop streaming */
-	if (vars.streaming)
-		streamon(FALSE);
-
-	/* Free memory */
-	vidioc_querybuf_cleanup();
-	for (i = 0; i < vars.num_capture_buffers; i++) {
-		free(vars.capture_buffers[i].image);
+	for (vars.pipe = 0; vars.pipe < MAX_PIPES; vars.pipe++) {
+		/* Save images */
+		for (i = 0; i < vars.pipes[vars.pipe].num_capture_buffers; i++)
+			capture_buffer_write(&vars.pipes[vars.pipe].capture_buffers[i], vars.pipes[vars.pipe].output, i);
 	}
-	close_device();
-	free(vars.output);
+
+	for (vars.pipe = 0; vars.pipe < MAX_PIPES; vars.pipe++) {
+		/* Stop streaming */
+		if (vars.pipes[vars.pipe].streaming)
+			streamon(FALSE);
+
+		/* Free memory */
+		vidioc_querybuf_cleanup();
+		for (i = 0; i < vars.pipes[vars.pipe].num_capture_buffers; i++) {
+			free(vars.pipes[vars.pipe].capture_buffers[i].image);
+		}
+		close_device();
+		free(vars.pipes[vars.pipe].output);
+	}
 
 	return 0;
 }
