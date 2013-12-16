@@ -1982,11 +1982,8 @@ static void shell(char *cmd)
 	print(1, "Executed `%s', status: %i\n", cmd, status);
 }
 
-int v4l2n_process_commands(int argc, char *argv[])
+static void process_commands(int argc, char *argv[])
 {
-	int ret = setjmp(vars.exception);
-	if (ret) return ret;
-
 	while (1) {
 		static const struct option long_options[] = {
 			{ "help", 0, NULL, 'h' },
@@ -2029,7 +2026,7 @@ int v4l2n_process_commands(int argc, char *argv[])
 		switch (c) {
 		case 'h':	/* --help, -h */
 			usage();
-			return 0;
+			return;
 
 		case 'v':	/* --verbose, -v */
 			if (optarg) {
@@ -2152,11 +2149,11 @@ int v4l2n_process_commands(int argc, char *argv[])
 
 		case 1003:	/* --ctrl-list */
 			symbol_dump(V4L2_CID, controls);
-			return 0;
+			return;
 
 		case 1004:	/* --fmt-list */
 			symbol_dump(V4L2_PIX_FMT, pixelformats);
-			return 0;
+			return;
 
 		case 'c':	/* --ctrl, -c, VIDIOC_QUERYCTRL / VIDIOC_S/G_CTRL / VIDIOC_S/G_EXT_CTRLS */
 			open_device(NULL);
@@ -2185,7 +2182,13 @@ int v4l2n_process_commands(int argc, char *argv[])
 			error("unknown option");
 		}
 	}
+}
 
+int v4l2n_process_commands(int argc, char *argv[])
+{
+	int ret = setjmp(vars.exception);
+	if (ret) return ret;
+	process_commands(argc, argv);
 	return 0;
 }
 
