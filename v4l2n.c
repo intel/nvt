@@ -907,6 +907,9 @@ static void vidioc_enuminput(void)
 			print(2, "> std:          %li\n", p.std);
 			print(2, "> status:       0x%08X\n", p.status);
 			print(2, "> capabilities: 0x%08X\n", p.capabilities);
+			print(2, "> reserved[0]:  0x%08X\n", p.reserved[0]);
+			print(2, "> reserved[1]:  0x%08X\n", p.reserved[1]);
+			print(2, "> reserved[2]:  0x%08X\n", p.reserved[2]);
 		}
 	} while (r == 0);
 	if (r != -EINVAL)
