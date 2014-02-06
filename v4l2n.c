@@ -663,6 +663,7 @@ static void usage(void)
 		"--ctrl-list	List supported V4L2 controls\n"
 		"--ctrl=$	Request given V4L2 controls\n"
 		"--fmt-list	List supported pixel formats\n"
+		"--enumctrl	Enumerate device V4L2 controls\n"
 		"-c $	(VIDIOC_QUERYCTRL / VIDIOC_S/G_CTRL / VIDIOC_S/G_EXT_CTRLS)\n"
 		"-w [x]		Wait of x seconds (may be fractional)\n"
 		"--wait\n"
@@ -1528,19 +1529,27 @@ static void v4l2_s_ext_ctrl(__u32 id, __s32 val)
 	xioctl(VIDIOC_S_EXT_CTRLS, &cs);
 }
 
-static void v4l2_query_ctrl(__u32 id)
+static int v4l2_query_ctrl(__u32 id, int errout)
 {
 	struct v4l2_queryctrl q;
+	int r = 0;
 
 	CLEAR(q);
 	q.id = id;
-	xioctl(VIDIOC_QUERYCTRL, &q);
+	if (errout)
+		xioctl(VIDIOC_QUERYCTRL, &q);
+	else
+		r = xioctl_try(VIDIOC_QUERYCTRL, &q);
+	if (r)
+		return r;
+
 	print(1, "VIDIOC_QUERYCTRL[%s] =\n", get_control_name(id));
 	print(2, "> type:    %i\n", q.type);
 	print(2, "> name:    `%.32s'\n", q.name);
 	print(2, "> limits:  %i..%i / %i\n", q.minimum, q.maximum, q.step);
 	print(2, "> default: %i\n", q.default_value);
 	print(2, "> flags:   %i\n", q.flags);
+	return 0;
 }
 
 static __s32 v4l2_g_ext_ctrl(__u32 id)
@@ -1612,10 +1621,24 @@ static void request_controls(char *start)
 			if (*value == ',')
 				next = TRUE;
 			end = value + 1;
-			v4l2_query_ctrl(id);
+			v4l2_query_ctrl(id, 1);
 		} else error("bad request for control");
 		start = end;
 	} while (next);
+}
+
+static void enumerate_controls(void)
+{
+	int id;
+
+	for (id = V4L2_CID_BASE; id < V4L2_CID_LASTP1; id++) {
+		v4l2_query_ctrl(id, 0);
+	}
+	for (id = V4L2_CID_PRIVATE_BASE; ; id++) {
+		int r = v4l2_query_ctrl(id, 0);
+		if (r == -EINVAL)
+			break;
+	}
 }
 
 #if USE_ATOMISP
@@ -2083,6 +2106,7 @@ static void process_commands(int argc, char *argv[])
 			{ "parameters", 1, NULL, 1014 },
 			{ "ctrl-list", 0, NULL, 1003 },
 			{ "fmt-list", 0, NULL, 1004 },
+			{ "enumctrl", 0, NULL, 1018 },
 			{ "ctrl", 1, NULL, 'c' },
 			{ "wait", 2, NULL, 'w' },
 			{ "waitkey", 0, NULL, 1009 },
@@ -2231,6 +2255,11 @@ static void process_commands(int argc, char *argv[])
 
 		case 1004:	/* --fmt-list */
 			symbol_dump(V4L2_PIX_FMT, pixelformats);
+			break;
+
+		case 1018:	/* --enumctrl */
+			open_device(NULL);
+			enumerate_controls();
 			break;
 
 		case 'c':	/* --ctrl, -c, VIDIOC_QUERYCTRL / VIDIOC_S/G_CTRL / VIDIOC_S/G_EXT_CTRLS */
