@@ -1,6 +1,6 @@
 	V4L2N Image and Video test tool
 	-------------------------------
-	Copyright 2011-2013 Intel
+	Copyright 2011-2014 Intel
 	Author: Tuukka Toivonen <tuukka.toivonen@intel.com>
 
 = Introduction =
@@ -70,8 +70,7 @@ v4l2n quits.
 
 Most of the options correspond directly to V4L2 ioctls but without the
 VIDIOC_X_ prefix. See
-	http://v4l2spec.bytesex.org/spec/
-	http://linuxtv.org/downloads/v4l-dvb-apis/
+	http://hverkuil.home.xs4all.nl/spec/media.html
 for documentation of the interface. The options take structure field
 names directly as parameters. For example, you could set the format with
 option "--fmt type=1,width=640,height=480,pixelformat=NV12" which corresponds
@@ -138,16 +137,39 @@ Setting exposure (Intel V4L2 extension):
 where 12 is coarse exposure, 34 is fine exposure, 56 is analog gain,
 and 78 is digital gain. These are directly register values.
 
-Run eternal viewfinder with adb (works from Windows prompt too):
+This example runs eternal viewfinder with adb (works from Windows prompt too),
+the parameters are for CSS1.5 (Clovertrail):
 	adb root
 	adb remount
 	adb push v4l2n /system/
-	adb shell /system/v4l2n --input 1 --parm type=1 --fmt 
-		type=1,width=800,height=600,pixelformat=NV12 --reqbufs
-		count=3,memory=USERPTR 	--capture=999999
-		-o /cache/testimage_@.raw
+	adb shell /system/v4l2n -o /cache/testimage_@.raw --input 1
+		--parm type=1 --fmt type=1,width=800,height=600,pixelformat=NV12
+		--reqbufs count=3,memory=USERPTR --capture=999999
 Only 100 first frames are saved to memory, the rest are discarded. Since v4l2n
 in practice will run eternally, the captured images are never saved to disk.
+
+This example captures one frame, pulls it from the phone, and converts to PNM
+file:
+	./v4l2n.sh -o /cache/testimage_@.raw --device /dev/video2 --input 0
+	--parm type=1,capturemode=CI_MODE_PREVIEW
+	--fmt type=1,width=1920,height=1080,pixelformat=NV12 --reqbufs
+	count=2,memory=USERPTR --exposure=5400,0,0,256 --capture=2
+	adb pull /cache/testimage_001.raw .
+	./raw2pnm -x1920 -y1080 -fNV12 testimage_001.raw testimage_001.pnm
+
+CSS2.0/2.1 (Merrifield, Moorefield) enable offline mode by default for still
+capture. This requires configuring two video pipes. To avoid that, you can
+use option --cvf_parm=0,0,0 to switch to online mode. Then you could capture
+raw images in still mode using this command:
+
+	./v4l2n.sh -o /cache/testimage_@.raw --device /dev/video0 --input 0
+	--parm type=1,capturemode=CI_MODE_STILL_CAPTURE --cvf_parm=0,0,0
+	--fmt type=1,width=4192,height=3104,pixelformat=SGRBG10 --reqbufs
+	count=2,memory=USERPTR --exposure=5400,0,0,256 --capture=2
+	adb pull /cache/testimage_001.raw .
+	./raw2pnm -x4224 -y3104 -fSGRBG10 testimage_001.raw testimage_001.pnm
+This example was from Saltbay, where extra padding is added to raw captured
+images. The "@" character in file name is replaced with frame number.
 
 Display list of image formats supported by v4l2n:
 	./v4l2n --fmt-list
@@ -156,24 +178,15 @@ SGRBG10 to capture raw Bayer images and NV12 to capture images in YUV
 colorspace. Currently raw2pnm supports only conversion of NV12 images into
 pnm files, support for SGRBG10 will be probably added later.
 
-Capture two images and save to files, check what was the format actually used:
-	./v4l2n.sh "--input 1 --parm type=1 --fmt
-		type=1,width=640,height=480,pixelformat=NV12 --fmt '?'
-		--reqbufs count=2,memory=USERPTR --capture=2
-		-o /cache/testimage_@.raw"
-The "@" character in file name is replaced with frame number.
-
 Convert raw NV12 file into pnm file:
 	./raw2pnm -x 640 -y 480 -f NV12 testimage_001.raw testimage_001.pnm
-Remember to check the resolution, it should match with what "--fmt '?'"
-displays.
+Remember to check the resolution, it should match with what v4l2n tells
+that the driver uses.
 
 == References ==
 	git://git-amr-4.devtools.intel.com/v4l2n-source.git
 		(v4l2n repository)
-	http://v4l2spec.bytesex.org/spec/
-	http://linuxtv.org/downloads/v4l-dvb-apis/
-		(V4L2 documentation)
+	http://hverkuil.home.xs4all.nl/spec/media.html
 	http://git.ideasonboard.org/yavta.git
 		(yet another simple V4L2 testing tool)
 
