@@ -26,4 +26,11 @@ pnm2txt: pnm2txt.c
 clean:
 	rm -f $(PROGS)
 
-
+.PHONY: release
+release:
+	$(MAKE) clean
+	$(MAKE) all
+	rm -rfv RELEASE
+	mkdir -p RELEASE/v4l2n
+	cp README $(PROGS) RELEASE/v4l2n
+	cd RELEASE && zip -r -9 -m ../v4l2n-`date +%Y%m%d`.zip v4l2n
