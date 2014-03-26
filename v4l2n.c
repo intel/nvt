@@ -721,11 +721,11 @@ static int symbol_get(const struct symbol_list *list, const char **symbol)
 	return r;
 }
 
-static void value_get(int *val, int n, const char **ptr)
+static int values_get(int *val, int val_size, const char **ptr)
 {
 	const char *s = *ptr;
 	bool paren = FALSE;
-	int i;
+	int i = 0;
 
 	if (!s)
 		error("missing integer values");
@@ -735,17 +735,16 @@ static void value_get(int *val, int n, const char **ptr)
 		paren = TRUE;
 	}
 
-	for (i=0; i<n; i++) {
+	while (i < val_size) {
 		char *a;
 		val[i] = strtol(s, &a, 0);
 		if (a == s)
-			error("failure parsing %ith integer argument", i);
+			break;
 		s = a;
-		if (i+1 < n) {
-			if (*s!=',' && *s!='/' && *s!=';')
-				error("missing %ith integer argument", i + 1);
-			s++;
-		}
+		i++;
+		if (*s!=',' && *s!='/' && *s!=';')
+			break;
+		s++;
 	}
 
 	if (paren) {
@@ -755,6 +754,14 @@ static void value_get(int *val, int n, const char **ptr)
 	}
 
 	*ptr = s;
+	return i;
+}
+
+static void value_get(int *val, int val_size, const char **ptr)
+{
+	int m = values_get(val, val_size, ptr);
+	if (m != val_size)
+		error("too little arguments, %i given but %i expected", m, val_size);
 }
 
 static int token_get(const struct token_list *list, const char **token, int val[4])
