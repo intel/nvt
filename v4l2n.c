@@ -2291,8 +2291,8 @@ static void process_commands(int argc, char *argv[])
 
 		case 1016:	/* --pipe */
 			vars.pipe = atoi(optarg);
-			if (vars.pipe >= MAX_PIPES)
-				error("Maximum of %i pipes available", MAX_PIPES);
+			if (vars.pipe > MAX_PIPES)
+				error("Maximum of %i pipes available", MAX_PIPES - 1);
 			print(1, "Selected pipe %i\n", vars.pipe);
 			break;
 
