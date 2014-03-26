@@ -41,9 +41,9 @@
 #define CLEAR(x)	memset(&(x), 0, sizeof(x));
 #define SIZE(x)		(sizeof(x)/sizeof((x)[0]))
 #define BIT(x)		(1<<(x))
-static unsigned long int PAGE_SIZE;
-static unsigned long int PAGE_MASK;
-#define PAGE_ALIGN(x)	((typeof(x))(((unsigned long int)(x) + PAGE_SIZE - 1) & PAGE_MASK))
+static unsigned long int _PAGE_SIZE;
+static unsigned long int _PAGE_MASK;
+#define PAGE_ALIGN(x)	((typeof(x))(((unsigned long int)(x) + _PAGE_SIZE - 1) & _PAGE_MASK))
 
 #define MAX_RING_BUFFERS	20
 #define MAX_CAPTURE_BUFFERS	100
@@ -1192,7 +1192,7 @@ static void vidioc_querybuf(void)
 			rb->mmap_p = p;
 			rb->start = p;
 		} else if (rb->querybuf.memory == V4L2_MEMORY_USERPTR) {
-			void *p = malloc(PAGE_ALIGN(vars.pipes[vars.pipe].format.fmt.pix.sizeimage) + PAGE_SIZE - 1);
+			void *p = malloc(PAGE_ALIGN(vars.pipes[vars.pipe].format.fmt.pix.sizeimage) + _PAGE_SIZE - 1);
 			if (p == NULL)
 				error("malloc failed");
 			rb->malloc_p = p;
@@ -2347,8 +2347,8 @@ int v4l2n_init(void)
 	int ret = setjmp(vars.exception);
 	if (ret) return ret;
 
-	PAGE_SIZE = getpagesize();
-	PAGE_MASK = ~(PAGE_SIZE - 1);
+	_PAGE_SIZE = getpagesize();
+	_PAGE_MASK = ~(_PAGE_SIZE - 1);
 
 	memset(&vars, 0, sizeof(vars));
 	if (gettimeofday(&vars.start_time, NULL) < 0) error("getting start time failed");
