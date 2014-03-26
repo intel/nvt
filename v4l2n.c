@@ -78,6 +78,7 @@ struct pipe {
 	struct v4l2_requestbuffers reqbufs;
 	int num_capture_buffers;
 	struct capture_buffer capture_buffers[MAX_CAPTURE_BUFFERS];
+	struct ring_buffer ring_buffers[MAX_RING_BUFFERS];
 	bool streaming;
 	bool msg_full_printed;
 };
@@ -86,7 +87,6 @@ static struct {
 	int verbosity;
 	bool save_images;
 	bool calculate_stats;
-	struct ring_buffer ring_buffers[MAX_RING_BUFFERS];
 	struct timeval start_time;
 	jmp_buf exception;
 	unsigned int pipe;
@@ -1145,7 +1145,7 @@ static void vidioc_querybuf_cleanup(void)
 	int i;
 
 	for (i = 0; i < MAX_RING_BUFFERS; i++) {
-		struct ring_buffer *rb = &vars.ring_buffers[i];
+		struct ring_buffer *rb = &vars.pipes[vars.pipe].ring_buffers[i];
 		free(rb->malloc_p);
 		if (rb->mmap_p) {
 			int r = munmap(rb->mmap_p, rb->querybuf.length);
@@ -1174,7 +1174,7 @@ static void vidioc_querybuf(void)
 		error("too many ring buffers");
 
 	for (i = 0; i < bufs; i++) {
-		struct ring_buffer *rb = &vars.ring_buffers[i];
+		struct ring_buffer *rb = &vars.pipes[vars.pipe].ring_buffers[i];
 
 		CLEAR(rb->querybuf);
 		rb->querybuf.type = t;
@@ -1306,13 +1306,13 @@ static void vidioc_dqbuf(void)
 	if (b.bytesused > vars.pipes[vars.pipe].format.fmt.pix.sizeimage)
 		error("Bad buffer size %i (sizeimage %i)",
 		      b.bytesused, vars.pipes[vars.pipe].format.fmt.pix.sizeimage);
-	if (b.bytesused > vars.ring_buffers[i].querybuf.length)
+	if (b.bytesused > vars.pipes[vars.pipe].ring_buffers[i].querybuf.length)
 		print(1, "warning: Bad buffer size %i (querybuf %i)\n",
-		      b.bytesused, vars.ring_buffers[i].querybuf.length);
+		      b.bytesused, vars.pipes[vars.pipe].ring_buffers[i].querybuf.length);
 
-	capture_buffer_stats(vars.ring_buffers[i].start, &vars.pipes[vars.pipe].format);
-	capture_buffer_save(vars.ring_buffers[i].start, &vars.pipes[vars.pipe].format, &b);
-	vars.ring_buffers[i].queued = FALSE;
+	capture_buffer_stats(vars.pipes[vars.pipe].ring_buffers[i].start, &vars.pipes[vars.pipe].format);
+	capture_buffer_save(vars.pipes[vars.pipe].ring_buffers[i].start, &vars.pipes[vars.pipe].format, &b);
+	vars.pipes[vars.pipe].ring_buffers[i].queued = FALSE;
 }
 
 static void vidioc_qbuf(void)
@@ -1323,7 +1323,7 @@ static void vidioc_qbuf(void)
 	int i;
 
 	for (i = 0; i < MAX_RING_BUFFERS; i++)
-		if (!vars.ring_buffers[i].queued) break;
+		if (!vars.pipes[vars.pipe].ring_buffers[i].queued) break;
 	if (i >= MAX_RING_BUFFERS)
 		error("no free buffers");
 
@@ -1333,7 +1333,7 @@ static void vidioc_qbuf(void)
 	b.memory = m;
 
 	if (m == V4L2_MEMORY_USERPTR) {
-		b.m.userptr = (unsigned long)vars.ring_buffers[i].start;
+		b.m.userptr = (unsigned long)vars.pipes[vars.pipe].ring_buffers[i].start;
 		b.length = vars.pipes[vars.pipe].format.fmt.pix.sizeimage;
 	} else if (m == V4L2_MEMORY_MMAP) {
 		/* Nothing here */
@@ -1342,7 +1342,7 @@ static void vidioc_qbuf(void)
 	print(1, "VIDIOC_QBUF index:%i\n", i);
 	print_buffer(&b, '>');
 	xioctl(VIDIOC_QBUF, &b);
-	vars.ring_buffers[i].queued = TRUE;
+	vars.pipes[vars.pipe].ring_buffers[i].queued = TRUE;
 }
 
 /* - Initialize capture,
