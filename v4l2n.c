@@ -1089,6 +1089,16 @@ static void itd_vidioc_fmt(bool try, const char *s)
 	print_v4l2_format(2, &p, '>');
 }
 
+static void itd_vidioc_try_fmt(const char *s)
+{
+	itd_vidioc_fmt(TRUE, s);
+}
+
+static void itd_vidioc_sg_fmt(const char *s)
+{
+	itd_vidioc_fmt(FALSE, s);
+}
+
 static void itd_vidioc_reqbufs(const char *s)
 {
 	static const struct token_list list[] = {
@@ -1437,7 +1447,7 @@ static void itr_stream(int frames)
 	}
 }
 
-static __u32 get_control_id(char *name)
+static __u32 get_control_id(const char *name)
 {
 	__u32 id;
 
@@ -1500,6 +1510,22 @@ static void itd_vidioc_querycap(const char *unused)
 	print(2, "> card:         `%.32s'\n", c.card);
 	print(2, "> bus_info:     `%.32s'\n", c.bus_info);
 	print(2, "> version:      %i.%u.%u\n", c.version >> 16, (c.version >> 8) & 0xFF, c.version & 0xFF);
+}
+
+static void itd_vidioc_sg_input(const char *arg)
+{
+	int i;
+
+	if (strchr(arg, '?')) {
+		/* G_INPUT */
+		itd_xioctl(VIDIOC_G_INPUT, &i);
+		print(1, "VIDIOC_G_INPUT -> %i\n", i);
+	} else {
+		/* S_INPUT */
+		i = atoi(arg);
+		print(1, "VIDIOC_S_INPUT <- %i\n", i);
+		itd_xioctl(VIDIOC_S_INPUT, &i);
+	}
 }
 
 static const char *get_control_name(__u32 id)
@@ -1606,7 +1632,7 @@ static int isident(int c)
 	return isalnum(c) || c == '_';
 }
 
-static void itd_request_controls(char *start)
+static void itd_request_controls(const char *start)
 {
 	char *end, *value;
 	bool ext, next;
@@ -1658,7 +1684,7 @@ static void itd_request_controls(char *start)
 	} while (next);
 }
 
-static void itd_enumerate_controls(void)
+static void itd_enumerate_controls(const char *unused)
 {
 	int id;
 
@@ -1701,8 +1727,6 @@ static void itd_atomisp_ioc_g_priv_int_data(int request, const char *filename)
 	CLEAR(data);
 	data.size = sizeof(buffer);
 	data.data = buffer;
-	print(1, request == ATOMISP_IOC_G_SENSOR_PRIV_INT_DATA ? "ATOMISP_IOC_G_SENSOR_PRIV_INT_DATA\n" :
-		 request == ATOMISP_IOC_G_MOTOR_PRIV_INT_DATA ? "ATOMISP_IOC_G_MOTOR_PRIV_INT_DATA\n" : "????");
 	itd_xioctl(request, &data);
 	print(2, "> size: %i\n", data.size);
 	if (filename) {
@@ -1711,7 +1735,19 @@ static void itd_atomisp_ioc_g_priv_int_data(int request, const char *filename)
 	}
 }
 
-static void itd_atomisp_ioc_g_sensor_mode_data(void)
+static void itd_atomisp_ioc_g_sensor_priv_int_data(const char *filename)
+{
+	print(1, "ATOMISP_IOC_G_SENSOR_PRIV_INT_DATA\n");
+	itd_atomisp_ioc_g_priv_int_data(ATOMISP_IOC_G_SENSOR_PRIV_INT_DATA, filename);
+}
+
+static void itd_atomisp_ioc_g_motor_priv_int_data(const char *filename)
+{
+	print(1, "ATOMISP_IOC_G_MOTOR_PRIV_INT_DATA\n");
+	itd_atomisp_ioc_g_priv_int_data(ATOMISP_IOC_G_MOTOR_PRIV_INT_DATA, filename);
+}
+
+static void itd_atomisp_ioc_g_sensor_mode_data(const char *unused)
 {
 	/* In principle this structure is sensor-specific.
 	 * In practice most (all?) drivers use the same structure.
@@ -1745,7 +1781,7 @@ static void itd_atomisp_ioc_g_sensor_mode_data(void)
 	print(2, "> vt_pix_clk_freq_mhz:                %i\n", ov8830->vt_pix_clk_freq_mhz);
 }
 
-static void itd_atomisp_memory_dump(char *arg)
+static void itd_atomisp_memory_dump(const char *arg)
 {
 	struct atomisp_de_config config;
 	int addr, len, r;
@@ -2213,21 +2249,10 @@ static void process_commands(int argc, char *argv[])
 			itr_iterate(itd_vidioc_querycap, NULL);
 			break;
 
-		case 'i': {	/* --input, -i, VIDIOC_S/G_INPUT */
-			int i;
+		case 'i':	/* --input, -i, VIDIOC_S/G_INPUT */
 			itr_iterate(itd_open_device, NULL);
-			if (strchr(optarg, '?')) {
-				/* G_INPUT */
-				itd_xioctl(VIDIOC_G_INPUT, &i);
-				print(1, "VIDIOC_G_INPUT -> %i\n", i);
-			} else {
-				/* S_INPUT */
-				i = atoi(optarg);
-				print(1, "VIDIOC_S_INPUT <- %i\n", i);
-				itd_xioctl(VIDIOC_S_INPUT, &i);
-			}
+			itr_iterate(itd_vidioc_sg_input, optarg);
 			break;
-		}
 
 		case 1005:	/* --enuminput */
 			itr_iterate(itd_open_device, NULL);
@@ -2245,12 +2270,12 @@ static void process_commands(int argc, char *argv[])
 
 		case 't':	/* --try-fmt, -t, VIDIOC_TRY_FMT */
 			itr_iterate(itd_open_device, NULL);
-			itd_vidioc_fmt(TRUE, optarg);
+			itr_iterate(itd_vidioc_try_fmt, optarg);
 			break;
 
 		case 'f':	/* --fmt, -f, VIDIOC_S/G_FMT */
 			itr_iterate(itd_open_device, NULL);
-			itd_vidioc_fmt(FALSE, optarg);
+			itr_iterate(itd_vidioc_sg_fmt, optarg);
 			break;
 
 		case 'r':	/* --reqbufs, -r, VIDIOC_REQBUFS */
@@ -2277,35 +2302,35 @@ static void process_commands(int argc, char *argv[])
 #if USE_ATOMISP
 		case 'x':	/* --exposure=S, -x: ATOMISP_IOC_S_EXPOSURE */
 			itr_iterate(itd_open_device, NULL);
-			itd_atomisp_ioc_s_exposure(optarg);
+			itr_iterate(itd_atomisp_ioc_s_exposure, optarg);
 			break;
 
 		case 1011:	/* --sensor_mode_data, ATOMISP_IOC_G_SENSOR_MODE_DATA */
 			itr_iterate(itd_open_device, NULL);
-			itd_atomisp_ioc_g_sensor_mode_data();
+			itr_iterate(itd_atomisp_ioc_g_sensor_mode_data, NULL);
 			break;
 
 		case 1008:	/* --priv_data=F, ATOMISP_IOC_G_SENSOR_PRIV_INT_DATA */
 			itr_iterate(itd_open_device, NULL);
-			itd_atomisp_ioc_g_priv_int_data(ATOMISP_IOC_G_SENSOR_PRIV_INT_DATA, optarg);
+			itr_iterate(itd_atomisp_ioc_g_sensor_priv_int_data, optarg);
 			break;
 
 		case 1010:	/* --motor_priv_data=F, ATOMISP_IOC_G_MOTOR_PRIV_INT_DATA */
-			itd_open_device(NULL);
-			itd_atomisp_ioc_g_priv_int_data(ATOMISP_IOC_G_MOTOR_PRIV_INT_DATA, optarg);
+			itr_iterate(itd_open_device, NULL);
+			itr_iterate(itd_atomisp_ioc_g_motor_priv_int_data, optarg);
 			break;
 
 		case 9999:	/* --isp_dump */
 			itr_iterate(itd_open_device, NULL);
-			itd_atomisp_memory_dump(optarg);
+			itr_iterate(itd_atomisp_memory_dump, optarg);
 			break;
 
 		case 1012:	/* --cvf_parm */
-			itd_atomisp_ioc_s_cvf_params(optarg);
+			itr_iterate(itd_atomisp_ioc_s_cvf_params, optarg);
 			break;
 
 		case 1014:	/* --parameters, ATOMISP_IOC_S_PARAMETERS */
-			itd_atomisp_ioc_s_parameters(optarg);
+			itr_iterate(itd_atomisp_ioc_s_parameters, optarg);
 			break;
 #endif
 
@@ -2319,12 +2344,12 @@ static void process_commands(int argc, char *argv[])
 
 		case 1018:	/* --enumctrl */
 			itr_iterate(itd_open_device, NULL);
-			itd_enumerate_controls();
+			itr_iterate(itd_enumerate_controls, NULL);
 			break;
 
 		case 'c':	/* --ctrl, -c, VIDIOC_QUERYCTRL / VIDIOC_S/G_CTRL / VIDIOC_S/G_EXT_CTRLS */
 			itr_iterate(itd_open_device, NULL);
-			itd_request_controls(optarg);
+			itr_iterate(itd_request_controls, optarg);
 			break;
 
 		case 'w':	/* -w, --wait */
