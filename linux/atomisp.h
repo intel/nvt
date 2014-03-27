@@ -36,6 +36,8 @@
 #define ATOMISP_HW_REVISION_SHIFT	8
 #define ATOMISP_HW_REVISION_ISP2300	0x00
 #define ATOMISP_HW_REVISION_ISP2400	0x10
+#define ATOMISP_HW_REVISION_ISP2401_LEGACY 0x11
+#define ATOMISP_HW_REVISION_ISP2401	0x20
 
 #define ATOMISP_HW_STEPPING_MASK	0x000000ff
 #define ATOMISP_HW_STEPPING_A0		0x00
@@ -170,7 +172,7 @@ struct atomisp_dvs_envelop {
 	unsigned int height;
 };
 
-#ifdef CONFIG_VIDEO_ATOMISP_CSS20
+#ifdef CSS20
 struct atomisp_grid_info {
 	uint32_t enable;
 	uint32_t use_dmem;
@@ -183,7 +185,7 @@ struct atomisp_grid_info {
 	uint32_t deci_factor_log2;
 	uint32_t elem_bit_depth;
 };
-#else /* CONFIG_VIDEO_ATOMISP_CSS20 */
+#else /* CSS20 */
 /* structure that describes the 3A and DIS grids shared with 3A lib*/
 struct atomisp_grid_info {
 	/* ISP input size that is visible for user */
@@ -202,7 +204,7 @@ struct atomisp_grid_info {
 	unsigned int dis_hor_coef_num;
 	unsigned int dis_ver_coef_num;
 };
-#endif /* CONFIG_VIDEO_ATOMISP_CSS20 */
+#endif /* CSS20 */
 struct atomisp_dis_vector {
 	int x;
 	int y;
@@ -231,23 +233,28 @@ struct atomisp_dvs2_stat_types {
 };
 
 struct atomisp_dis_coefficients {
-#ifdef CONFIG_VIDEO_ATOMISP_CSS20
+#ifdef CSS20
 	struct atomisp_dvs_grid_info grid_info;
 	struct atomisp_dvs2_coef_types hor_coefs;
 	struct atomisp_dvs2_coef_types ver_coefs;
-#else /* CONFIG_VIDEO_ATOMISP_CSS20 */
+#else /* CSS20 */
 	struct atomisp_grid_info grid_info;
 	short __user *vertical_coefficients;
 	short __user *horizontal_coefficients;
-#endif /* CONFIG_VIDEO_ATOMISP_CSS20 */
+#endif /* CSS20 */
 };
 
-struct atomisp_dis_statistics {
-#ifdef CONFIG_VIDEO_ATOMISP_CSS20
+struct atomisp_dvs2_statistics {
 	struct atomisp_dvs_grid_info grid_info;
 	struct atomisp_dvs2_stat_types hor_prod;
 	struct atomisp_dvs2_stat_types ver_prod;
-#else /* CONFIG_VIDEO_ATOMISP_CSS20 */
+};
+
+struct atomisp_dis_statistics {
+#ifdef CSS20
+	struct atomisp_dvs2_statistics dvs2_stat;
+	uint32_t exp_id;
+#else /* CSS20 */
 	struct atomisp_grid_info grid_info;
 	int __user *vertical_projections;
 	int __user *horizontal_projections;
@@ -261,18 +268,28 @@ struct atomisp_3a_rgby_output {
 	uint32_t y;
 };
 
-#ifdef CONFIG_VIDEO_ATOMISP_CSS20
+struct atomisp_metadata {
+	void __user *data;
+	uint32_t width;
+	uint32_t height;
+	uint32_t stride; /* in bytes */
+	uint32_t exp_id; /* exposure ID */
+	uint32_t *effective_width; /* mipi packets valid data size */
+};
+
+#ifdef CSS20
 struct atomisp_3a_statistics {
 	struct atomisp_grid_info  grid_info;
 	struct atomisp_3a_output __user *data;
 	struct atomisp_3a_rgby_output __user *rgby_data;
+	uint32_t exp_id; /* exposure ID */
 };
-#else /* CONFIG_VIDEO_ATOMISP_CSS20 */
+#else /* CSS20 */
 struct atomisp_3a_statistics {
 	struct atomisp_grid_info  grid_info;
 	struct atomisp_3a_output __user *data;
 };
-#endif /* CONFIG_VIDEO_ATOMISP_CSS20 */
+#endif /* CSS20 */
 /**
  * struct atomisp_cont_capture_conf - continuous capture parameters
  * @num_captures: number of still images to capture
@@ -317,7 +334,7 @@ struct atomisp_de_config {
 };
 
 /* Chroma enhancement */
-#ifdef CONFIG_VIDEO_ATOMISP_CSS20
+#ifdef CSS20
 struct atomisp_ce_config {
 	unsigned char uv_level_min;
 	unsigned char uv_level_max;
@@ -341,16 +358,32 @@ struct atomisp_dp_config {
 	 * defects if the value is set too large. u8_8
 	 */
 	unsigned int gain;
+#ifdef CSS21
+	unsigned int gr;
+	unsigned int r;
+	unsigned int b;
+	unsigned int gb;
+#endif
 };
 
 /* XNR threshold */
 struct atomisp_xnr_config {
+#ifdef CSS21
+	__u16 threshold;
+#else
 	unsigned int threshold;
+#endif
+};
+
+/* metadata config */
+struct atomisp_metadata_config {
+	uint32_t metadata_height;
+	uint32_t metadata_stride;
 };
 
 struct atomisp_parm {
 	struct atomisp_grid_info info;
-#ifdef CONFIG_VIDEO_ATOMISP_CSS20
+#ifdef CSS20
 	struct atomisp_dvs_grid_info dvs_grid;
 	struct atomisp_dvs_envelop dvs_envelop;
 #endif
@@ -363,9 +396,29 @@ struct atomisp_parm {
 	struct atomisp_nr_config nr_config;
 	struct atomisp_ee_config ee_config;
 	struct atomisp_tnr_config tnr_config;
+	struct atomisp_metadata_config metadata_config;
+};
+
+struct dvs2_bq_resolution {
+	int width_bq;         /* width [BQ] */
+	int height_bq;        /* height [BQ] */
+};
+
+struct atomisp_dvs2_bq_resolutions {
+	/* GDC source image size [BQ] */
+	struct dvs2_bq_resolution source_bq;
+	/* GDC output image size [BQ] */
+	struct dvs2_bq_resolution output_bq;
+	/* GDC effective envelope size [BQ] */
+	struct dvs2_bq_resolution envelope_bq;
+	/* isp pipe filter size [BQ] */
+	struct dvs2_bq_resolution ispfilter_bq;
+	/* GDC shit size [BQ] */
+	struct dvs2_bq_resolution gdc_shift_bq;
 };
 
 struct atomisp_dvs_6axis_config {
+	uint32_t exp_id;
 	uint32_t width_y;
 	uint32_t height_y;
 	uint32_t width_uv;
@@ -376,7 +429,7 @@ struct atomisp_dvs_6axis_config {
 	uint32_t *ycoords_uv;
 };
 
-#ifdef CONFIG_VIDEO_ATOMISP_CSS20
+#ifdef CSS20
 struct atomisp_parameters {
 	struct atomisp_wb_config   *wb_config;  /* White Balance config */
 	struct atomisp_cc_config   *cc_config;  /* Color Correction config */
@@ -420,7 +473,7 @@ struct atomisp_parameters {
 	struct atomisp_capture_config   *capture_config;
 	struct atomisp_anr_thres   *anr_thres;
 };
-#else /* CONFIG_VIDEO_ATOMISP_CSS20 */
+#else /* CSS20 */
 struct atomisp_parameters {
 	struct atomisp_wb_config *wb_config;
 	struct atomisp_cc_config *cc_config;
@@ -440,7 +493,7 @@ struct atomisp_parameters {
 	struct atomisp_gc_config *gc_config;
 	struct atomisp_3a_config *a3a_config;
 };
-#endif /* CONFIG_VIDEO_ATOMISP_CSS20 */
+#endif /* CSS20 */
 #define ATOMISP_GAMMA_TABLE_SIZE        1024
 struct atomisp_gamma_table {
 	unsigned short data[ATOMISP_GAMMA_TABLE_SIZE];
@@ -452,7 +505,7 @@ struct atomisp_gamma_table {
  */
 #define ATOMISP_MORPH_TABLE_NUM_PLANES  6
 struct atomisp_morph_table {
-#ifdef CONFIG_VIDEO_ATOMISP_CSS20
+#ifdef CSS20
 	unsigned int enabled;
 #endif
 	unsigned int height;
@@ -464,7 +517,7 @@ struct atomisp_morph_table {
 #define ATOMISP_NUM_SC_COLORS	4
 #define ATOMISP_SC_FLAG_QUERY	(1 << 0)
 
-#ifdef CONFIG_VIDEO_ATOMISP_CSS20
+#ifdef CSS20
 struct atomisp_shading_table {
 	__u32 enable;
 
@@ -476,7 +529,7 @@ struct atomisp_shading_table {
 
 	__u16 *data[ATOMISP_NUM_SC_COLORS];
 };
-#else /* CONFIG_VIDEO_ATOMISP_CSS20 */
+#else /* CSS20 */
 struct atomisp_shading_table {
 	/*
 	 * If flag ATOMISP_SC_FLAG_QUERY is set, IOCTL will only query current
@@ -502,7 +555,7 @@ struct atomisp_shading_table {
 	/* one table for each color (use sh_css_sc_color to index) */
 	__u16 __user *data[ATOMISP_NUM_SC_COLORS];
 };
-#endif /* CONFIG_VIDEO_ATOMISP_CSS20 */
+#endif /* CSS20 */
 
 struct atomisp_makernote_info {
 	/* bits 31-16: numerator, bits 15-0: denominator */
@@ -619,7 +672,7 @@ enum atomisp_focus_hp {
 enum atomisp_camera_port {
 	ATOMISP_CAMERA_PORT_SECONDARY,
 	ATOMISP_CAMERA_PORT_PRIMARY,
-	ATOMISP_CAMERA_PORT_THIRD,
+	ATOMISP_CAMERA_PORT_TERTIARY,
 	ATOMISP_CAMERA_NR_PORTS
 };
 
@@ -676,7 +729,7 @@ enum atomisp_acc_arg_type {
 	ATOMISP_ACC_ARG_FRAME	     /* Frame argument */
 };
 
-#if defined(CONFIG_ISP2400) || defined(CONFIG_ISP2400B0)
+#if defined(ISP2400) || defined(ISP2400B0)
 /** ISP memories, isp2400 */
 enum atomisp_acc_memory {
 	ATOMISP_ACC_MEMORY_PMEM0 = 0,
@@ -688,7 +741,7 @@ enum atomisp_acc_memory {
 	ATOMISP_ACC_MEMORY_HMEM0,
 	ATOMISP_ACC_NR_MEMORY
 };
-#else /* defined(CONFIG_ISP2400) || defined(CONFIG_ISP2400B0) */
+#else /* defined(ISP2400) || defined(ISP2400B0) */
 /** ISP memories, isp2300 */
 enum atomisp_acc_memory {
 	ATOMISP_ACC_MEMORY_PMEM = 0,
@@ -698,7 +751,7 @@ enum atomisp_acc_memory {
 	ATOMISP_ACC_MEMORY_VAMEM2,
 	ATOMISP_ACC_NR_MEMORY		/* Must be last */
 };
-#endif /* defined(CONFIG_ISP2400) || defined(CONFIG_ISP2400B0) */
+#endif /* defined(ISP2400) || defined(ISP2400B0) */
 
 struct atomisp_sp_arg {
 	enum atomisp_acc_arg_type type;	/* Type  of SP argument */
@@ -794,160 +847,195 @@ struct v4l2_private_int_data {
 #define ATOMISP_IOC_G_XNR \
 	_IOR('v', BASE_VIDIOC_PRIVATE + 0, int)
 #define ATOMISP_IOC_S_XNR \
-	_IOW('v', BASE_VIDIOC_PRIVATE + 1, int)
+	_IOW('v', BASE_VIDIOC_PRIVATE + 0, int)
 #define ATOMISP_IOC_G_NR \
-	_IOR('v', BASE_VIDIOC_PRIVATE + 2, struct atomisp_nr_config)
+	_IOR('v', BASE_VIDIOC_PRIVATE + 1, struct atomisp_nr_config)
 #define ATOMISP_IOC_S_NR \
-	_IOW('v', BASE_VIDIOC_PRIVATE + 3, struct atomisp_nr_config)
+	_IOW('v', BASE_VIDIOC_PRIVATE + 1, struct atomisp_nr_config)
 #define ATOMISP_IOC_G_TNR \
-	_IOR('v', BASE_VIDIOC_PRIVATE + 4, struct atomisp_tnr_config)
+	_IOR('v', BASE_VIDIOC_PRIVATE + 2, struct atomisp_tnr_config)
 #define ATOMISP_IOC_S_TNR \
-	_IOW('v', BASE_VIDIOC_PRIVATE + 5, struct atomisp_tnr_config)
+	_IOW('v', BASE_VIDIOC_PRIVATE + 2, struct atomisp_tnr_config)
 #define ATOMISP_IOC_G_HISTOGRAM \
-	_IOWR('v', BASE_VIDIOC_PRIVATE + 6, struct atomisp_histogram)
+	_IOWR('v', BASE_VIDIOC_PRIVATE + 3, struct atomisp_histogram)
 #define ATOMISP_IOC_S_HISTOGRAM \
-	_IOW('v', BASE_VIDIOC_PRIVATE + 7, struct atomisp_histogram)
+	_IOW('v', BASE_VIDIOC_PRIVATE + 3, struct atomisp_histogram)
 #define ATOMISP_IOC_G_BLACK_LEVEL_COMP \
-	_IOR('v', BASE_VIDIOC_PRIVATE + 8, struct atomisp_ob_config)
+	_IOR('v', BASE_VIDIOC_PRIVATE + 4, struct atomisp_ob_config)
 #define ATOMISP_IOC_S_BLACK_LEVEL_COMP \
-	_IOW('v', BASE_VIDIOC_PRIVATE + 9, struct atomisp_ob_config)
+	_IOW('v', BASE_VIDIOC_PRIVATE + 4, struct atomisp_ob_config)
 #define ATOMISP_IOC_G_EE \
-	_IOR('v', BASE_VIDIOC_PRIVATE + 12, struct atomisp_ee_config)
+	_IOR('v', BASE_VIDIOC_PRIVATE + 5, struct atomisp_ee_config)
 #define ATOMISP_IOC_S_EE \
-	_IOW('v', BASE_VIDIOC_PRIVATE + 13, struct atomisp_ee_config)
+	_IOW('v', BASE_VIDIOC_PRIVATE + 5, struct atomisp_ee_config)
 /* Digital Image Stabilization:
  * 1. get dis statistics: reads DIS statistics from ISP (every frame)
  * 2. set dis coefficients: set DIS filter coefficients (one time)
  * 3. set dis motion vecotr: set motion vector (result of DIS, every frame)
  */
 #define ATOMISP_IOC_G_DIS_STAT \
-	_IOWR('v', BASE_VIDIOC_PRIVATE + 14, struct atomisp_dis_statistics)
-#define ATOMISP_IOC_S_DIS_COEFS \
-	_IOW('v', BASE_VIDIOC_PRIVATE + 15, struct atomisp_dis_coefficients)
+	_IOWR('v', BASE_VIDIOC_PRIVATE + 6, struct atomisp_dis_statistics)
 
-#ifdef CONFIG_VIDEO_ATOMISP_CSS20
+#define ATOMISP_IOC_G_DVS2_BQ_RESOLUTIONS \
+	_IOR('v', BASE_VIDIOC_PRIVATE + 6, struct atomisp_dvs2_bq_resolutions)
+
+#define ATOMISP_IOC_S_DIS_COEFS \
+	_IOW('v', BASE_VIDIOC_PRIVATE + 6, struct atomisp_dis_coefficients)
+
+#ifdef CSS20
 #define ATOMISP_IOC_S_DIS_VECTOR \
-	_IOW('v', BASE_VIDIOC_PRIVATE + 16, struct atomisp_dvs_6axis_config)
+	_IOW('v', BASE_VIDIOC_PRIVATE + 6, struct atomisp_dvs_6axis_config)
 #else
 #define ATOMISP_IOC_S_DIS_VECTOR \
-	_IOW('v', BASE_VIDIOC_PRIVATE + 16, struct atomisp_dis_vector)
+	_IOW('v', BASE_VIDIOC_PRIVATE + 6, struct atomisp_dis_vector)
 #endif
 
 #define ATOMISP_IOC_G_3A_STAT \
-	_IOW('v', BASE_VIDIOC_PRIVATE + 17, struct atomisp_3a_statistics)
+	_IOW('v', BASE_VIDIOC_PRIVATE + 7, struct atomisp_3a_statistics)
 #define ATOMISP_IOC_G_ISP_PARM \
-	_IOR('v', BASE_VIDIOC_PRIVATE + 18, struct atomisp_parm)
+	_IOR('v', BASE_VIDIOC_PRIVATE + 8, struct atomisp_parm)
 #define ATOMISP_IOC_S_ISP_PARM \
-	_IOW('v', BASE_VIDIOC_PRIVATE + 19, struct atomisp_parm)
+	_IOW('v', BASE_VIDIOC_PRIVATE + 8, struct atomisp_parm)
 #define ATOMISP_IOC_G_ISP_GAMMA \
-	_IOR('v', BASE_VIDIOC_PRIVATE + 20, struct atomisp_gamma_table)
+	_IOR('v', BASE_VIDIOC_PRIVATE + 9, struct atomisp_gamma_table)
 #define ATOMISP_IOC_S_ISP_GAMMA \
-	_IOW('v', BASE_VIDIOC_PRIVATE + 21, struct atomisp_gamma_table)
+	_IOW('v', BASE_VIDIOC_PRIVATE + 9, struct atomisp_gamma_table)
 #define ATOMISP_IOC_G_ISP_GDC_TAB \
-	_IOR('v', BASE_VIDIOC_PRIVATE + 22, struct atomisp_morph_table)
+	_IOR('v', BASE_VIDIOC_PRIVATE + 10, struct atomisp_morph_table)
 #define ATOMISP_IOC_S_ISP_GDC_TAB \
-	_IOW('v', BASE_VIDIOC_PRIVATE + 23, struct atomisp_morph_table)
+	_IOW('v', BASE_VIDIOC_PRIVATE + 10, struct atomisp_morph_table)
 #define ATOMISP_IOC_ISP_MAKERNOTE \
-	_IOWR('v', BASE_VIDIOC_PRIVATE + 24, struct atomisp_makernote_info)
+	_IOWR('v', BASE_VIDIOC_PRIVATE + 11, struct atomisp_makernote_info)
 
 /* macc parameter control*/
 #define ATOMISP_IOC_G_ISP_MACC \
-	_IOR('v', BASE_VIDIOC_PRIVATE + 25, struct atomisp_macc_config)
+	_IOR('v', BASE_VIDIOC_PRIVATE + 12, struct atomisp_macc_config)
 #define ATOMISP_IOC_S_ISP_MACC \
-	_IOW('v', BASE_VIDIOC_PRIVATE + 26, struct atomisp_macc_config)
+	_IOW('v', BASE_VIDIOC_PRIVATE + 12, struct atomisp_macc_config)
 
 /* Defect pixel detection & Correction */
 #define ATOMISP_IOC_G_ISP_BAD_PIXEL_DETECTION \
-	_IOR('v', BASE_VIDIOC_PRIVATE + 27, struct atomisp_dp_config)
+	_IOR('v', BASE_VIDIOC_PRIVATE + 13, struct atomisp_dp_config)
 #define ATOMISP_IOC_S_ISP_BAD_PIXEL_DETECTION \
-	_IOW('v', BASE_VIDIOC_PRIVATE + 28, struct atomisp_dp_config)
+	_IOW('v', BASE_VIDIOC_PRIVATE + 13, struct atomisp_dp_config)
 
 /* False Color Correction */
 #define ATOMISP_IOC_G_ISP_FALSE_COLOR_CORRECTION \
-	_IOR('v', BASE_VIDIOC_PRIVATE + 29, struct atomisp_de_config)
+	_IOR('v', BASE_VIDIOC_PRIVATE + 14, struct atomisp_de_config)
 #define ATOMISP_IOC_S_ISP_FALSE_COLOR_CORRECTION \
-	_IOW('v', BASE_VIDIOC_PRIVATE + 30, struct atomisp_de_config)
+	_IOW('v', BASE_VIDIOC_PRIVATE + 14, struct atomisp_de_config)
 
 /* ctc parameter control */
 #define ATOMISP_IOC_G_ISP_CTC \
-	_IOR('v', BASE_VIDIOC_PRIVATE + 31, struct atomisp_ctc_table)
+	_IOR('v', BASE_VIDIOC_PRIVATE + 15, struct atomisp_ctc_table)
 #define ATOMISP_IOC_S_ISP_CTC \
-	_IOW('v', BASE_VIDIOC_PRIVATE + 32, struct atomisp_ctc_table)
+	_IOW('v', BASE_VIDIOC_PRIVATE + 15, struct atomisp_ctc_table)
 
 /* white balance Correction */
 #define ATOMISP_IOC_G_ISP_WHITE_BALANCE \
-	_IOR('v', BASE_VIDIOC_PRIVATE + 33, struct atomisp_wb_config)
+	_IOR('v', BASE_VIDIOC_PRIVATE + 16, struct atomisp_wb_config)
 #define ATOMISP_IOC_S_ISP_WHITE_BALANCE \
-	_IOW('v', BASE_VIDIOC_PRIVATE + 34, struct atomisp_wb_config)
+	_IOW('v', BASE_VIDIOC_PRIVATE + 16, struct atomisp_wb_config)
 
 /* fpn table loading */
 #define ATOMISP_IOC_S_ISP_FPN_TABLE \
-	_IOW('v', BASE_VIDIOC_PRIVATE + 35, struct v4l2_framebuffer)
+	_IOW('v', BASE_VIDIOC_PRIVATE + 17, struct v4l2_framebuffer)
 
 /* overlay image loading */
 #define ATOMISP_IOC_G_ISP_OVERLAY \
-	_IOWR('v', BASE_VIDIOC_PRIVATE + 36, struct atomisp_overlay)
+	_IOWR('v', BASE_VIDIOC_PRIVATE + 18, struct atomisp_overlay)
 #define ATOMISP_IOC_S_ISP_OVERLAY \
-	_IOW('v', BASE_VIDIOC_PRIVATE + 37, struct atomisp_overlay)
+	_IOW('v', BASE_VIDIOC_PRIVATE + 18, struct atomisp_overlay)
 
 /* bcd driver bridge */
 #define ATOMISP_IOC_CAMERA_BRIDGE \
-	_IOWR('v', BASE_VIDIOC_PRIVATE + 38, struct atomisp_bc_video_package)
+	_IOWR('v', BASE_VIDIOC_PRIVATE + 19, struct atomisp_bc_video_package)
 
 /* Sensor resolution specific info for AE */
 #define ATOMISP_IOC_G_SENSOR_MODE_DATA \
-	_IOR('v', BASE_VIDIOC_PRIVATE + 39, struct atomisp_sensor_mode_data)
+	_IOR('v', BASE_VIDIOC_PRIVATE + 20, struct atomisp_sensor_mode_data)
 
 #define ATOMISP_IOC_S_EXPOSURE \
-	_IOW('v', BASE_VIDIOC_PRIVATE + 40, struct atomisp_exposure)
+	_IOW('v', BASE_VIDIOC_PRIVATE + 21, struct atomisp_exposure)
 
 /* sensor calibration registers group */
 #define ATOMISP_IOC_G_SENSOR_CALIBRATION_GROUP \
-	_IOWR('v', BASE_VIDIOC_PRIVATE + 41, struct atomisp_calibration_group)
+	_IOWR('v', BASE_VIDIOC_PRIVATE + 22, struct atomisp_calibration_group)
 
 /* white balance Correction */
 #define ATOMISP_IOC_G_3A_CONFIG \
-	_IOR('v', BASE_VIDIOC_PRIVATE + 42, struct atomisp_3a_config)
+	_IOR('v', BASE_VIDIOC_PRIVATE + 23, struct atomisp_3a_config)
 #define ATOMISP_IOC_S_3A_CONFIG \
-	_IOW('v', BASE_VIDIOC_PRIVATE + 43, struct atomisp_3a_config)
+	_IOW('v', BASE_VIDIOC_PRIVATE + 23, struct atomisp_3a_config)
 
 /* Accelerate ioctls */
 #define ATOMISP_IOC_ACC_LOAD \
-	_IOWR('v', BASE_VIDIOC_PRIVATE + 44, struct atomisp_acc_fw_load)
+	_IOWR('v', BASE_VIDIOC_PRIVATE + 24, struct atomisp_acc_fw_load)
 
 #define ATOMISP_IOC_ACC_UNLOAD \
-	_IOWR('v', BASE_VIDIOC_PRIVATE + 45, unsigned int)
+	_IOWR('v', BASE_VIDIOC_PRIVATE + 24, unsigned int)
 
 /* For CSS 1.0 only */
 #define ATOMISP_IOC_ACC_S_ARG \
-	_IOW('v', BASE_VIDIOC_PRIVATE + 46, struct atomisp_acc_fw_arg)
+	_IOW('v', BASE_VIDIOC_PRIVATE + 24, struct atomisp_acc_fw_arg)
 
 #define ATOMISP_IOC_ACC_START \
-	_IOW('v', BASE_VIDIOC_PRIVATE + 47, unsigned int)
+	_IOW('v', BASE_VIDIOC_PRIVATE + 24, unsigned int)
 
 #define ATOMISP_IOC_ACC_WAIT \
-	_IOW('v', BASE_VIDIOC_PRIVATE + 48, unsigned int)
+	_IOW('v', BASE_VIDIOC_PRIVATE + 25, unsigned int)
 
 #define ATOMISP_IOC_ACC_ABORT \
-	_IOW('v', BASE_VIDIOC_PRIVATE + 49, struct atomisp_acc_fw_abort)
+	_IOW('v', BASE_VIDIOC_PRIVATE + 25, struct atomisp_acc_fw_abort)
+
+#define ATOMISP_IOC_ACC_DESTAB \
+	_IOW('v', BASE_VIDIOC_PRIVATE + 25, struct atomisp_acc_fw_arg)
 
 /* sensor OTP memory read */
 #define ATOMISP_IOC_G_SENSOR_PRIV_INT_DATA \
-	_IOWR('v', BASE_VIDIOC_PRIVATE + 50, struct v4l2_private_int_data)
+	_IOWR('v', BASE_VIDIOC_PRIVATE + 26, struct v4l2_private_int_data)
 
 /* LCS (shading) table write */
 #define ATOMISP_IOC_S_ISP_SHD_TAB \
-	_IOWR('v', BASE_VIDIOC_PRIVATE + 51, struct atomisp_shading_table)
+	_IOWR('v', BASE_VIDIOC_PRIVATE + 27, struct atomisp_shading_table)
 
 /* Gamma Correction */
 #define ATOMISP_IOC_G_ISP_GAMMA_CORRECTION \
-	_IOR('v', BASE_VIDIOC_PRIVATE + 52, struct atomisp_gc_config)
+	_IOR('v', BASE_VIDIOC_PRIVATE + 28, struct atomisp_gc_config)
 
 #define ATOMISP_IOC_S_ISP_GAMMA_CORRECTION \
-	_IOW('v', BASE_VIDIOC_PRIVATE + 53, struct atomisp_gc_config)
+	_IOW('v', BASE_VIDIOC_PRIVATE + 28, struct atomisp_gc_config)
 
-#define ATOMISP_IOC_ACC_DESTAB \
-	_IOW('v', BASE_VIDIOC_PRIVATE + 54, struct atomisp_acc_fw_arg)
+/* motor internal memory read */
+#define ATOMISP_IOC_G_MOTOR_PRIV_INT_DATA \
+	_IOWR('v', BASE_VIDIOC_PRIVATE + 29, struct v4l2_private_int_data)
+
+/*
+ * Ioctls to map and unmap user buffers to CSS address space for acceleration.
+ * User fills fields length and user_ptr and sets other fields to zero,
+ * kernel may modify the flags and sets css_ptr.
+ */
+#define ATOMISP_IOC_ACC_MAP \
+	_IOWR('v', BASE_VIDIOC_PRIVATE + 30, struct atomisp_acc_map)
+
+/* User fills fields length, user_ptr, and css_ptr and zeroes other fields. */
+#define ATOMISP_IOC_ACC_UNMAP \
+	_IOW('v', BASE_VIDIOC_PRIVATE + 30, struct atomisp_acc_map)
+
+#define ATOMISP_IOC_ACC_S_MAPPED_ARG \
+	_IOW('v', BASE_VIDIOC_PRIVATE + 30, struct atomisp_acc_s_mapped_arg)
+
+#define ATOMISP_IOC_ACC_LOAD_TO_PIPE \
+	_IOWR('v', BASE_VIDIOC_PRIVATE + 31, struct atomisp_acc_fw_load_to_pipe)
+
+#define ATOMISP_IOC_S_PARAMETERS \
+	_IOW('v', BASE_VIDIOC_PRIVATE + 32, struct atomisp_parameters)
+
+#define ATOMISP_IOC_S_CONT_CAPTURE_CONFIG \
+	_IOWR('v', BASE_VIDIOC_PRIVATE + 33, struct atomisp_cont_capture_conf)
+
+#define ATOMISP_IOC_G_METADATA \
+	_IOWR('v', BASE_VIDIOC_PRIVATE + 34, struct atomisp_metadata)
 
 /*
  * Reserved ioctls. We have customer implementing it internally.
@@ -959,34 +1047,6 @@ struct v4l2_private_int_data {
  * #define ATOMISP_IOC_S_SENSOR_REG \
  *	_IOW('v', BASE_VIDIOC_PRIVATE + 56, struct atomisp_sensor_regs)
  */
-
-/* motor internal memory read */
-#define ATOMISP_IOC_G_MOTOR_PRIV_INT_DATA \
-	_IOWR('v', BASE_VIDIOC_PRIVATE + 57, struct v4l2_private_int_data)
-
-/*
- * Ioctls to map and unmap user buffers to CSS address space for acceleration.
- * User fills fields length and user_ptr and sets other fields to zero,
- * kernel may modify the flags and sets css_ptr.
- */
-#define ATOMISP_IOC_ACC_MAP \
-	_IOWR('v', BASE_VIDIOC_PRIVATE + 58, struct atomisp_acc_map)
-
-/* User fills fields length, user_ptr, and css_ptr and zeroes other fields. */
-#define ATOMISP_IOC_ACC_UNMAP \
-	_IOW('v', BASE_VIDIOC_PRIVATE + 59, struct atomisp_acc_map)
-
-#define ATOMISP_IOC_ACC_S_MAPPED_ARG \
-	_IOW('v', BASE_VIDIOC_PRIVATE + 60, struct atomisp_acc_s_mapped_arg)
-
-#define ATOMISP_IOC_S_PARAMETERS \
-	_IOW('v', BASE_VIDIOC_PRIVATE + 61, struct atomisp_parameters)
-
-#define ATOMISP_IOC_S_CONT_CAPTURE_CONFIG \
-	_IOWR('v', BASE_VIDIOC_PRIVATE + 62, struct atomisp_cont_capture_conf)
-
-#define ATOMISP_IOC_ACC_LOAD_TO_PIPE \
-	_IOWR('v', BASE_VIDIOC_PRIVATE + 63, struct atomisp_acc_fw_load_to_pipe)
 
 /*  ISP Private control IDs */
 #define V4L2_CID_ATOMISP_BAD_PIXEL_DETECTION \
@@ -1049,6 +1109,7 @@ struct v4l2_private_int_data {
 #define ATOMISP_RUN_MODE_STILL_CAPTURE		2
 #define ATOMISP_RUN_MODE_CONTINUOUS_CAPTURE	3
 #define ATOMISP_RUN_MODE_PREVIEW		4
+#define ATOMISP_RUN_MODE_SDV			5
 
 #define V4L2_CID_ENABLE_VFPP			(V4L2_CID_CAMERA_LASTP1 + 21)
 #define V4L2_CID_ATOMISP_CONTINUOUS_MODE	(V4L2_CID_CAMERA_LASTP1 + 22)
@@ -1062,12 +1123,16 @@ struct v4l2_private_int_data {
 #define ATOMISP_VFPP_DISABLE_SCALER		1
 #define ATOMISP_VFPP_DISABLE_LOWLAT		2
 
+/* Query real flash status register value */
+#define V4L2_CID_FLASH_STATUS_REGISTER  (V4L2_CID_CAMERA_LASTP1 + 26)
+
 #define V4L2_BUF_FLAG_BUFFER_INVALID       0x0400
 #define V4L2_BUF_FLAG_BUFFER_VALID         0x0800
 
 #define V4L2_BUF_TYPE_VIDEO_CAPTURE_ION  (V4L2_BUF_TYPE_PRIVATE + 1024)
 
 #define V4L2_EVENT_ATOMISP_3A_STATS_READY   (V4L2_EVENT_PRIVATE_START + 1)
+#define V4L2_EVENT_ATOMISP_METADATA_READY   (V4L2_EVENT_PRIVATE_START + 2)
 
 /* Nonstandard color effects for V4L2_CID_COLORFX */
 enum {
