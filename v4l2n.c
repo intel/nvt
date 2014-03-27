@@ -1172,7 +1172,7 @@ static void itd_vidioc_querybuf_cleanup(void)
 	}
 }
 
-static void itd_vidioc_querybuf(void)
+static void itd_vidioc_querybuf(const char *unused)
 {
 	const enum v4l2_buf_type t = vars.pipes[vars.pipe].reqbufs.type;
 	const int bufs = vars.pipes[vars.pipe].reqbufs.count;
@@ -1370,30 +1370,32 @@ static void itd_vidioc_qbuf(void)
  */
 static void itr_capture(int frames)
 {
-	const int bufs = vars.pipes[vars.pipe].reqbufs.count;
-	const int tail = MIN(bufs, frames);
-	int i;
+	itr_iterate(itd_vidioc_querybuf, NULL);
 
-	itd_vidioc_querybuf();
+	if (frames <= 0)
+		return;
 
-	for (i = 0; i < tail; i++) {
-		itd_vidioc_qbuf();
-	}
-
-	itd_streamon((char*)TRUE);
-
-	if (frames > tail) {
-		for (i = 0; i < frames - tail; i++) {
-			itd_vidioc_dqbuf();
+	for (vars.pipe = 0; vars.pipe < MAX_PIPES; vars.pipe++) {
+		int i;
+		const int bufs = vars.pipes[vars.pipe].reqbufs.count;
+		const int tail = MIN(bufs, frames);
+		if (!vars.pipes[vars.pipe].active) continue;
+		for (i = 0; i < tail; i++)
 			itd_vidioc_qbuf();
+	}
+
+	itr_iterate(itd_streamon, (char*)TRUE);
+
+	do {
+		for (vars.pipe = 0; vars.pipe < MAX_PIPES; vars.pipe++) {
+			if (!vars.pipes[vars.pipe].active) continue;
+			itd_vidioc_dqbuf();
+			if (frames > vars.pipes[vars.pipe].reqbufs.count)
+				itd_vidioc_qbuf();
 		}
-	}
+	} while (--frames);
 
-	for (i = 0; i < tail; i++) {
-		itd_vidioc_dqbuf();
-	}
-
-	itd_streamon((char*)FALSE);
+	itr_iterate(itd_streamon, (char*)FALSE);
 }
 
 /* - Initialize capture unless it already has been done,
@@ -1408,18 +1410,30 @@ static void itr_stream(int frames)
 {
 	int i;
 
-	if (!vars.pipes[vars.pipe].streaming) {
+	/* Queue buffers (only for pipes which are not yet streaming) */
+	for (vars.pipe = 0; vars.pipe < MAX_PIPES; vars.pipe++) {
+		if (!vars.pipes[vars.pipe].active ||
+		    vars.pipes[vars.pipe].streaming) continue;
+		itd_vidioc_querybuf(NULL);
 		/* Initialize streaming and queue all buffers */
-		itd_vidioc_querybuf();
-		for (i = 0; i < vars.pipes[vars.pipe].reqbufs.count; i++) {
+		for (i = 0; i < vars.pipes[vars.pipe].reqbufs.count; i++)
 			itd_vidioc_qbuf();
-		}
+	}
+
+	/* Start streaming (only for pipes which are not yet streaming) */
+	for (vars.pipe = 0; vars.pipe < MAX_PIPES; vars.pipe++) {
+		if (!vars.pipes[vars.pipe].active ||
+		    vars.pipes[vars.pipe].streaming) continue;
 		itd_streamon((char*)TRUE);
 	}
 
+	/* Stream frames (all active pipes) */
 	for (i = 0; i < frames; i++) {
-		itd_vidioc_dqbuf();
-		itd_vidioc_qbuf();
+		for (vars.pipe = 0; vars.pipe < MAX_PIPES; vars.pipe++) {
+			if (!vars.pipes[vars.pipe].active) continue;
+			itd_vidioc_dqbuf();
+			itd_vidioc_qbuf();
+		}
 	}
 }
 
