@@ -586,9 +586,9 @@ static void error(char *msg, ...)
 	exit(1);
 }
 
-#define xioctl(io, arg) xioctl_(#io, io, arg)
+#define itd_xioctl(io, arg) itd_xioctl_(#io, io, arg)
 
-static void xioctl_(char *ios, int ion, void *arg)
+static void itd_xioctl_(char *ios, int ion, void *arg)
 {
 	int fd = vars.pipes[vars.pipe].fd;
 	int r = ioctl(fd, ion, arg);
@@ -596,7 +596,7 @@ static void xioctl_(char *ios, int ion, void *arg)
 		error("%s failed on fd %i", ios, fd);
 }
 
-static int xioctl_try(int ion, void *arg)
+static int itd_xioctl_try(int ion, void *arg)
 {
 	int r = ioctl(vars.pipes[vars.pipe].fd, ion, arg);
 	if (r != 0) {
@@ -914,7 +914,7 @@ static void itd_vidioc_enuminput(const char *unused)
 		CLEAR(p);
 		p.index = i++;
 		print(1, "VIDIOC_ENUMINPUT (index=%i)\n", p.index);
-		r = xioctl_try(VIDIOC_ENUMINPUT, &p);
+		r = itd_xioctl_try(VIDIOC_ENUMINPUT, &p);
 		if (r == 0) {
 			print(2, "> index:        %i\n", p.index);
 			print(2, "> name:         `%.32s'\n", p.name);
@@ -933,20 +933,21 @@ static void itd_vidioc_enuminput(const char *unused)
 		error("VIDIOC_ENUMINPUT failed");
 }
 
-static void streamon(bool on)
+static void itd_streamon(const char *arg)
 {
+	bool on = (arg != NULL);
 	enum v4l2_buf_type t = vars.pipes[vars.pipe].reqbufs.type;
 	print(1, "VIDIOC_STREAM%s (type=%s)\n", on ? "ON" : "OFF", symbol_str(t, v4l2_buf_types));
 	if (vars.pipes[vars.pipe].streaming == on)
 		print(0, "warning: streaming is already in this state\n");
 	if (on)
-		xioctl(VIDIOC_STREAMON, &t);
+		itd_xioctl(VIDIOC_STREAMON, &t);
 	else
-		xioctl(VIDIOC_STREAMOFF, &t);
+		itd_xioctl(VIDIOC_STREAMOFF, &t);
 	vars.pipes[vars.pipe].streaming = on;
 }
 
-static void vidioc_parm(const char *s)
+static void itd_vidioc_parm(const char *s)
 {
 	static const struct symbol_list capturemode[] = {
 		{ V4L2_MODE_HIGHQUALITY, "V4L2_MODE_HIGHQUALITY" },
@@ -1001,7 +1002,7 @@ static void vidioc_parm(const char *s)
 
 	if (*s == '?') {
 		print(1, "VIDIOC_G_PARM\n");
-		xioctl(VIDIOC_G_PARM, &p);
+		itd_xioctl(VIDIOC_G_PARM, &p);
 	} else {
 		print(1, "VIDIOC_S_PARM\n");
 	}
@@ -1020,7 +1021,7 @@ static void vidioc_parm(const char *s)
 	}
 
 	if (*s != '?') {
-		xioctl(VIDIOC_S_PARM, &p);
+		itd_xioctl(VIDIOC_S_PARM, &p);
 	}
 }
 
@@ -1039,7 +1040,7 @@ static void print_v4l2_format(int v, struct v4l2_format *f, char c)
 	}
 }
 
-static void vidioc_fmt(bool try, const char *s)
+static void itd_vidioc_fmt(bool try, const char *s)
 {
 	static const struct token_list list[] = {
 		{ 't', TOKEN_F_ARG, "type", v4l2_buf_types },
@@ -1075,20 +1076,20 @@ static void vidioc_fmt(bool try, const char *s)
 
 	if (try) {
 		print(1, "VIDIOC_TRY_FMT\n");
-		xioctl(VIDIOC_TRY_FMT, &p);
+		itd_xioctl(VIDIOC_TRY_FMT, &p);
 	} else if (*s == '?') {
 		print(1, "VIDIOC_G_FMT\n");
-		xioctl(VIDIOC_G_FMT, &p);
+		itd_xioctl(VIDIOC_G_FMT, &p);
 	} else {
 		print(1, "VIDIOC_S_FMT\n");
 		print_v4l2_format(3, &p, '<');
-		xioctl(VIDIOC_S_FMT, &p);
+		itd_xioctl(VIDIOC_S_FMT, &p);
 		vars.pipes[vars.pipe].format = p;
 	}
 	print_v4l2_format(2, &p, '>');
 }
 
-static void vidioc_reqbufs(const char *s)
+static void itd_vidioc_reqbufs(const char *s)
 {
 	static const struct token_list list[] = {
 		{ 'c', TOKEN_F_ARG, "count", NULL },
@@ -1111,7 +1112,7 @@ static void vidioc_reqbufs(const char *s)
 	print(2, ": count:   %i\n", p->count);
 	print(2, ": type:    %s\n", symbol_str(p->type, v4l2_buf_types));
 	print(2, ": memory:  %s\n", symbol_str(p->memory, v4l2_memory));
-	xioctl(VIDIOC_REQBUFS, p);
+	itd_xioctl(VIDIOC_REQBUFS, p);
 	print(2, "> count:   %i\n", p->count);
 }
 
@@ -1156,7 +1157,7 @@ static void print_buffer(struct v4l2_buffer *b, char c)
 //	print(v, "%c input:     %i\n", c, b->input);
 }
 
-static void vidioc_querybuf_cleanup(void)
+static void itd_vidioc_querybuf_cleanup(void)
 {
 	int i;
 
@@ -1171,13 +1172,13 @@ static void vidioc_querybuf_cleanup(void)
 	}
 }
 
-static void vidioc_querybuf(void)
+static void itd_vidioc_querybuf(void)
 {
 	const enum v4l2_buf_type t = vars.pipes[vars.pipe].reqbufs.type;
 	const int bufs = vars.pipes[vars.pipe].reqbufs.count;
 	int i;
 
-	vidioc_querybuf_cleanup();
+	itd_vidioc_querybuf_cleanup();
 
 	if (t != V4L2_BUF_TYPE_VIDEO_CAPTURE)
 		error("unsupported operation type");
@@ -1197,7 +1198,7 @@ static void vidioc_querybuf(void)
 		rb->querybuf.memory = vars.pipes[vars.pipe].reqbufs.memory;
 		rb->querybuf.index = i;
 		print(1, "VIDIOC_QUERYBUF index:%i\n", rb->querybuf.index);
-		xioctl(VIDIOC_QUERYBUF, &rb->querybuf);
+		itd_xioctl(VIDIOC_QUERYBUF, &rb->querybuf);
 		print_buffer(&rb->querybuf, '>');
 
 		if (rb->querybuf.memory == V4L2_MEMORY_MMAP) {
@@ -1272,7 +1273,7 @@ static void capture_buffer_stats(void *image, struct v4l2_format *format)
 			(double)stat[p][SUM] / stat[p][NUM], (int)stat[p][MIN], (int)stat[p][MAX]);
 }
 
-static void capture_buffer_save(void *image, struct v4l2_format *format, struct v4l2_buffer *buffer)
+static void itd_capture_buffer_save(void *image, struct v4l2_format *format, struct v4l2_buffer *buffer)
 {
 	struct capture_buffer *cb;
 
@@ -1301,7 +1302,7 @@ static void capture_buffer_save(void *image, struct v4l2_format *format, struct 
 	memcpy(cb->image, image, cb->length);
 }
 
-static void vidioc_dqbuf(void)
+static void itd_vidioc_dqbuf(void)
 {
 	enum v4l2_buf_type t = vars.pipes[vars.pipe].reqbufs.type;
 	enum v4l2_memory m = vars.pipes[vars.pipe].reqbufs.memory;
@@ -1312,7 +1313,7 @@ static void vidioc_dqbuf(void)
 	b.type = t;
 	b.memory = m;
 	print(1, "VIDIOC_DQBUF ");
-	xioctl(VIDIOC_DQBUF, &b);
+	itd_xioctl(VIDIOC_DQBUF, &b);
 	print_time();
 	print_buffer(&b, '>');
 	i = b.index;
@@ -1327,11 +1328,11 @@ static void vidioc_dqbuf(void)
 		      b.bytesused, vars.pipes[vars.pipe].ring_buffers[i].querybuf.length);
 
 	capture_buffer_stats(vars.pipes[vars.pipe].ring_buffers[i].start, &vars.pipes[vars.pipe].format);
-	capture_buffer_save(vars.pipes[vars.pipe].ring_buffers[i].start, &vars.pipes[vars.pipe].format, &b);
+	itd_capture_buffer_save(vars.pipes[vars.pipe].ring_buffers[i].start, &vars.pipes[vars.pipe].format, &b);
 	vars.pipes[vars.pipe].ring_buffers[i].queued = FALSE;
 }
 
-static void vidioc_qbuf(void)
+static void itd_vidioc_qbuf(void)
 {
 	enum v4l2_buf_type t = vars.pipes[vars.pipe].reqbufs.type;
 	enum v4l2_memory m = vars.pipes[vars.pipe].reqbufs.memory;
@@ -1357,7 +1358,7 @@ static void vidioc_qbuf(void)
 
 	print(1, "VIDIOC_QBUF index:%i\n", i);
 	print_buffer(&b, '>');
-	xioctl(VIDIOC_QBUF, &b);
+	itd_xioctl(VIDIOC_QBUF, &b);
 	vars.pipes[vars.pipe].ring_buffers[i].queued = TRUE;
 }
 
@@ -1367,32 +1368,32 @@ static void vidioc_qbuf(void)
  * - and disable streaming.
  * This keeps always queue as full as possible.
  */
-static void capture(int frames)
+static void itr_capture(int frames)
 {
 	const int bufs = vars.pipes[vars.pipe].reqbufs.count;
 	const int tail = MIN(bufs, frames);
 	int i;
 
-	vidioc_querybuf();
+	itd_vidioc_querybuf();
 
 	for (i = 0; i < tail; i++) {
-		vidioc_qbuf();
+		itd_vidioc_qbuf();
 	}
 
-	streamon(TRUE);
+	itd_streamon((char*)TRUE);
 
 	if (frames > tail) {
 		for (i = 0; i < frames - tail; i++) {
-			vidioc_dqbuf();
-			vidioc_qbuf();
+			itd_vidioc_dqbuf();
+			itd_vidioc_qbuf();
 		}
 	}
 
 	for (i = 0; i < tail; i++) {
-		vidioc_dqbuf();
+		itd_vidioc_dqbuf();
 	}
 
-	streamon(FALSE);
+	itd_streamon((char*)FALSE);
 }
 
 /* - Initialize capture unless it already has been done,
@@ -1403,22 +1404,22 @@ static void capture(int frames)
  * The argument `frames' may be zero, in which case streaming
  * is enabled and buffers are queued but none are captured.
  */
-static void stream(int frames)
+static void itr_stream(int frames)
 {
 	int i;
 
 	if (!vars.pipes[vars.pipe].streaming) {
 		/* Initialize streaming and queue all buffers */
-		vidioc_querybuf();
+		itd_vidioc_querybuf();
 		for (i = 0; i < vars.pipes[vars.pipe].reqbufs.count; i++) {
-			vidioc_qbuf();
+			itd_vidioc_qbuf();
 		}
-		streamon(TRUE);
+		itd_streamon((char*)TRUE);
 	}
 
 	for (i = 0; i < frames; i++) {
-		vidioc_dqbuf();
-		vidioc_qbuf();
+		itd_vidioc_dqbuf();
+		itd_vidioc_qbuf();
 	}
 }
 
@@ -1449,7 +1450,7 @@ static __u32 get_control_id(char *name)
 	return id;
 }
 
-static void close_device()
+static void itd_close_device(const char *unused)
 {
 	if (vars.pipes[vars.pipe].fd == -1)
 		return;
@@ -1459,13 +1460,13 @@ static void close_device()
 	print(1, "CLOSED video device\n");
 }
 
-static void open_device(const char *device)
+static void itd_open_device(const char *device)
 {
 	static const char DEFAULT_DEV[] = "/dev/video0";
 	if (device == NULL && vars.pipes[vars.pipe].fd != -1)
 		return;
 
-	close_device();
+	itd_close_device(NULL);
 	if (!device || device[0] == 0)
 		device = DEFAULT_DEV;
 	print(1, "OPEN video device `%s'\n", device);
@@ -1474,12 +1475,12 @@ static void open_device(const char *device)
 		error("failed to open `%s'", device);
 }
 
-static void vidioc_querycap()
+static void itd_vidioc_querycap(const char *unused)
 {
 	struct v4l2_capability c;
 
 	CLEAR(c);
-	xioctl(VIDIOC_QUERYCAP, &c);
+	itd_xioctl(VIDIOC_QUERYCAP, &c);
 	print(1, "VIDIOC_QUERYCAP\n");
 	print(2, "> driver:       `%.16s'\n", c.driver);
 	print(2, "> card:         `%.32s'\n", c.card);
@@ -1500,7 +1501,7 @@ static const char *get_control_name(__u32 id)
 	return buf;
 }
 
-static void v4l2_s_ctrl(__u32 id, __s32 val)
+static void itd_v4l2_s_ctrl(__u32 id, __s32 val)
 {
 	struct v4l2_control c;
 
@@ -1508,21 +1509,21 @@ static void v4l2_s_ctrl(__u32 id, __s32 val)
 	c.id = id;
 	c.value = val;
 	print(1, "VIDIOC_S_CTRL[%s] = %i\n", get_control_name(id), c.value);
-	xioctl(VIDIOC_S_CTRL, &c);
+	itd_xioctl(VIDIOC_S_CTRL, &c);
 }
 
-static __s32 v4l2_g_ctrl(__u32 id)
+static __s32 itd_v4l2_g_ctrl(__u32 id)
 {
 	struct v4l2_control c;
 
 	CLEAR(c);
 	c.id = id;
-	xioctl(VIDIOC_G_CTRL, &c);
+	itd_xioctl(VIDIOC_G_CTRL, &c);
 	print(1, "VIDIOC_G_CTRL[%s] = %i\n", get_control_name(id), c.value);
 	return c.value;
 }
 
-static void v4l2_s_ext_ctrl(__u32 id, __s32 val)
+static void itd_v4l2_s_ext_ctrl(__u32 id, __s32 val)
 {
 	struct v4l2_ext_controls cs;
 	struct v4l2_ext_control c;
@@ -1542,10 +1543,10 @@ static void v4l2_s_ext_ctrl(__u32 id, __s32 val)
 	print(2, "< controls:   %p\n", cs.controls);
 	print(2, "<< id:        0x%08X\n", c.id);
 	print(2, "<< value:     %i\n", c.value);
-	xioctl(VIDIOC_S_EXT_CTRLS, &cs);
+	itd_xioctl(VIDIOC_S_EXT_CTRLS, &cs);
 }
 
-static int v4l2_query_ctrl(__u32 id, int errout)
+static int itd_v4l2_query_ctrl(__u32 id, int errout)
 {
 	struct v4l2_queryctrl q;
 	int r = 0;
@@ -1553,9 +1554,9 @@ static int v4l2_query_ctrl(__u32 id, int errout)
 	CLEAR(q);
 	q.id = id;
 	if (errout)
-		xioctl(VIDIOC_QUERYCTRL, &q);
+		itd_xioctl(VIDIOC_QUERYCTRL, &q);
 	else
-		r = xioctl_try(VIDIOC_QUERYCTRL, &q);
+		r = itd_xioctl_try(VIDIOC_QUERYCTRL, &q);
 	if (r)
 		return r;
 
@@ -1568,7 +1569,7 @@ static int v4l2_query_ctrl(__u32 id, int errout)
 	return 0;
 }
 
-static __s32 v4l2_g_ext_ctrl(__u32 id)
+static __s32 itd_v4l2_g_ext_ctrl(__u32 id)
 {
 	struct v4l2_ext_controls cs;
 	struct v4l2_ext_control c;
@@ -1581,7 +1582,7 @@ static __s32 v4l2_g_ext_ctrl(__u32 id)
 	CLEAR(c);
 	c.id = id;
 
-	xioctl(VIDIOC_G_EXT_CTRLS, &cs);
+	itd_xioctl(VIDIOC_G_EXT_CTRLS, &cs);
 	print(1, "VIDIOC_G_EXT_CTRLS[%s] = %i\n", get_control_name(id), c.value);
 	return c.value;
 }
@@ -1591,7 +1592,7 @@ static int isident(int c)
 	return isalnum(c) || c == '_';
 }
 
-static void request_controls(char *start)
+static void itd_request_controls(char *start)
 {
 	char *end, *value;
 	bool ext, next;
@@ -1620,45 +1621,45 @@ static void request_controls(char *start)
 			if (sscanf(value, "%i", &val) != 1)
 				error("bad control value");
 			if (ext)
-				v4l2_s_ext_ctrl(id, val);
+				itd_v4l2_s_ext_ctrl(id, val);
 			else
-				v4l2_s_ctrl(id, val);
+				itd_v4l2_s_ctrl(id, val);
 		} else if (op == '?') {
 			/* Get value */
 			if (*value == ',')
 				next = TRUE;
 			end = value + 1;
 			if (ext)
-				v4l2_g_ext_ctrl(id);
+				itd_v4l2_g_ext_ctrl(id);
 			else
-				v4l2_g_ctrl(id);
+				itd_v4l2_g_ctrl(id);
 		} else if (op == '#') {
 			/* Query control */
 			if (*value == ',')
 				next = TRUE;
 			end = value + 1;
-			v4l2_query_ctrl(id, 1);
+			itd_v4l2_query_ctrl(id, 1);
 		} else error("bad request for control");
 		start = end;
 	} while (next);
 }
 
-static void enumerate_controls(void)
+static void itd_enumerate_controls(void)
 {
 	int id;
 
 	for (id = V4L2_CID_BASE; id < V4L2_CID_LASTP1; id++) {
-		v4l2_query_ctrl(id, 0);
+		itd_v4l2_query_ctrl(id, 0);
 	}
 	for (id = V4L2_CID_PRIVATE_BASE; ; id++) {
-		int r = v4l2_query_ctrl(id, 0);
+		int r = itd_v4l2_query_ctrl(id, 0);
 		if (r == -EINVAL)
 			break;
 	}
 }
 
 #if USE_ATOMISP
-static void atomisp_ioc_s_exposure(const char *arg)
+static void itd_atomisp_ioc_s_exposure(const char *arg)
 {
 	struct atomisp_exposure exposure;
 	int val[4];
@@ -1675,10 +1676,10 @@ static void atomisp_ioc_s_exposure(const char *arg)
 		exposure.integration_time[1],
 		exposure.gain[0],
 		exposure.gain[1]);
-	xioctl(ATOMISP_IOC_S_EXPOSURE, &exposure);
+	itd_xioctl(ATOMISP_IOC_S_EXPOSURE, &exposure);
 }
 
-static void atomisp_ioc_g_priv_int_data(int request, const char *filename)
+static void itd_atomisp_ioc_g_priv_int_data(int request, const char *filename)
 {
 	char buffer[1024*32];
 	struct v4l2_private_int_data data;
@@ -1688,7 +1689,7 @@ static void atomisp_ioc_g_priv_int_data(int request, const char *filename)
 	data.data = buffer;
 	print(1, request == ATOMISP_IOC_G_SENSOR_PRIV_INT_DATA ? "ATOMISP_IOC_G_SENSOR_PRIV_INT_DATA\n" :
 		 request == ATOMISP_IOC_G_MOTOR_PRIV_INT_DATA ? "ATOMISP_IOC_G_MOTOR_PRIV_INT_DATA\n" : "????");
-	xioctl(request, &data);
+	itd_xioctl(request, &data);
 	print(2, "> size: %i\n", data.size);
 	if (filename) {
 		write_file(filename, buffer, data.size);
@@ -1696,7 +1697,7 @@ static void atomisp_ioc_g_priv_int_data(int request, const char *filename)
 	}
 }
 
-static void atomisp_ioc_g_sensor_mode_data(void)
+static void itd_atomisp_ioc_g_sensor_mode_data(void)
 {
 	/* In principle this structure is sensor-specific.
 	 * In practice most (all?) drivers use the same structure.
@@ -1718,7 +1719,7 @@ static void atomisp_ioc_g_sensor_mode_data(void)
 
 	CLEAR(data);
 	print(1, "ATOMISP_IOC_G_SENSOR_MODE_DATA\n");
-	xioctl(ATOMISP_IOC_G_SENSOR_MODE_DATA, &data);
+	itd_xioctl(ATOMISP_IOC_G_SENSOR_MODE_DATA, &data);
 	print(2, "> coarse_integration_time_min:        %i\n", ov8830->coarse_integration_time_min);
 	print(2, "> coarse_integration_time_max_margin: %i\n", ov8830->coarse_integration_time_max_margin);
 	print(2, "> fine_integration_time_min:          %i\n", ov8830->fine_integration_time_min);
@@ -1730,7 +1731,7 @@ static void atomisp_ioc_g_sensor_mode_data(void)
 	print(2, "> vt_pix_clk_freq_mhz:                %i\n", ov8830->vt_pix_clk_freq_mhz);
 }
 
-static void atomisp_memory_dump(char *arg)
+static void itd_atomisp_memory_dump(char *arg)
 {
 	struct atomisp_de_config config;
 	int addr, len, r;
@@ -1743,12 +1744,12 @@ static void atomisp_memory_dump(char *arg)
 	config.c1_coring_threshold = addr;
 	config.c2_coring_threshold = len;
 	print(1, "ATOMISP_IOC_S_ISP_FALSE_COLOR_CORRECTION: addr 0x%08X len %i\n", addr, len);
-	r = xioctl_try(ATOMISP_IOC_S_ISP_FALSE_COLOR_CORRECTION, &config);
+	r = itd_xioctl_try(ATOMISP_IOC_S_ISP_FALSE_COLOR_CORRECTION, &config);
 	print(2, "> dumped ISP memory to kernel log\n");
 	if (r != -EDOTDOT) print(1, "> incorrect response %i from kernel\n", r);
 }
 
-static void atomisp_ioc_s_cvf_params(const char *arg)
+static void itd_atomisp_ioc_s_cvf_params(const char *arg)
 {
 	struct atomisp_cont_capture_conf cvf_parm;
 	int val[3];
@@ -1764,10 +1765,10 @@ static void atomisp_ioc_s_cvf_params(const char *arg)
 		cvf_parm.num_captures,
 		cvf_parm.skip_frames,
 		cvf_parm.offset);
-	xioctl(ATOMISP_IOC_S_CONT_CAPTURE_CONFIG, &cvf_parm);
+	itd_xioctl(ATOMISP_IOC_S_CONT_CAPTURE_CONFIG, &cvf_parm);
 }
 
-static void atomisp_ioc_s_parameters(const char *s)
+static void itd_atomisp_ioc_s_parameters(const char *s)
 {
 	static const struct token_list list[] = {
 		{ 'W' << 8, 0, "wb_config", NULL },
@@ -1991,10 +1992,17 @@ static void atomisp_ioc_s_parameters(const char *s)
 	if (p.xnr_config) {
 		print(2, "< xnr_config->threshold:      %i\n", p.xnr_config->threshold);
 	} else  print(2, "< xnr_config: NULL\n");
-	xioctl(ATOMISP_IOC_S_PARAMETERS, &p);
+	itd_xioctl(ATOMISP_IOC_S_PARAMETERS, &p);
 }
 
 #endif
+
+static void itd_output_name(const char *arg)
+{
+	vars.pipes[vars.pipe].output = strdup(arg);
+	if (!vars.pipes[vars.pipe].output) error("out of memory");
+	vars.save_images = TRUE;
+}
 
 static void select_pipes(const char *p)
 {
@@ -2179,113 +2187,111 @@ static void process_commands(int argc, char *argv[])
 			break;
 
 		case 'd':	/* --device, --open, -d */
-			open_device(optarg);
+			itr_iterate(itd_open_device, optarg);
 			break;
 
 		case 1017:	/* --close */
-			close_device();
+			itr_iterate(itd_close_device, NULL);
 			break;
 
 		case 1001:	/* --querycap */
-			open_device(NULL);
-			vidioc_querycap();
+			itr_iterate(itd_open_device, NULL);
+			itr_iterate(itd_vidioc_querycap, NULL);
 			break;
 
 		case 'i': {	/* --input, -i, VIDIOC_S/G_INPUT */
 			int i;
-			open_device(NULL);
+			itr_iterate(itd_open_device, NULL);
 			if (strchr(optarg, '?')) {
 				/* G_INPUT */
-				xioctl(VIDIOC_G_INPUT, &i);
+				itd_xioctl(VIDIOC_G_INPUT, &i);
 				print(1, "VIDIOC_G_INPUT -> %i\n", i);
 			} else {
 				/* S_INPUT */
 				i = atoi(optarg);
 				print(1, "VIDIOC_S_INPUT <- %i\n", i);
-				xioctl(VIDIOC_S_INPUT, &i);
+				itd_xioctl(VIDIOC_S_INPUT, &i);
 			}
 			break;
 		}
 
 		case 1005:	/* --enuminput */
-			open_device(NULL);
+			itr_iterate(itd_open_device, NULL);
 			itr_iterate(itd_vidioc_enuminput, NULL);
 			break;
 
 		case 'o':
-			vars.pipes[vars.pipe].output = strdup(optarg);
-			if (!vars.pipes[vars.pipe].output) error("out of memory");
-			vars.save_images = TRUE;
+			itr_iterate(itd_output_name, optarg);
 			break;
 
 		case 'p':	/* --parm, -p, VIDIOC_S/G_PARM */
-			open_device(NULL);
-			vidioc_parm(optarg);
+			itr_iterate(itd_open_device, NULL);
+			itr_iterate(itd_vidioc_parm, optarg);
 			break;
 
 		case 't':	/* --try-fmt, -t, VIDIOC_TRY_FMT */
-			open_device(NULL);
-			vidioc_fmt(TRUE, optarg);
+			itr_iterate(itd_open_device, NULL);
+			itd_vidioc_fmt(TRUE, optarg);
 			break;
 
 		case 'f':	/* --fmt, -f, VIDIOC_S/G_FMT */
-			open_device(NULL);
-			vidioc_fmt(FALSE, optarg);
+			itr_iterate(itd_open_device, NULL);
+			itd_vidioc_fmt(FALSE, optarg);
 			break;
 
 		case 'r':	/* --reqbufs, -r, VIDIOC_REQBUFS */
-			open_device(NULL);
-			vidioc_reqbufs(optarg);
+			itr_iterate(itd_open_device, NULL);
+			itr_iterate(itd_vidioc_reqbufs, optarg);
 			break;
 
 		case 's':	/* --streamoff, -o, VIDIOC_STREAMOFF: stop streaming */
-			streamon(TRUE);
+			itr_iterate(itd_streamon, (char*)FALSE);
 			break;
 
 		case 'e':	/* --streamon, -s, VIDIOC_STREAMON: start streaming */
-			streamon(FALSE);
+			itr_iterate(itd_streamon, (char*)TRUE);
 			break;
 
 		case 'a':	/* --capture=N, -a: capture N buffers using QBUF/DQBUF */
-			capture(optarg ? atoi(optarg) : 1);
+			itr_capture(optarg ? atoi(optarg) : 1);
 			break;
 
 		case 1006:	/* --stream=N: capture N buffers and leave streaming on */
-			stream(optarg ? atoi(optarg) : 1);
+			itr_stream(optarg ? atoi(optarg) : 1);
 			break;
 
 #if USE_ATOMISP
 		case 'x':	/* --exposure=S, -x: ATOMISP_IOC_S_EXPOSURE */
-			open_device(NULL);
-			atomisp_ioc_s_exposure(optarg);
+			itr_iterate(itd_open_device, NULL);
+			itd_atomisp_ioc_s_exposure(optarg);
 			break;
 
 		case 1011:	/* --sensor_mode_data, ATOMISP_IOC_G_SENSOR_MODE_DATA */
-			open_device(NULL);
-			atomisp_ioc_g_sensor_mode_data();
+			itr_iterate(itd_open_device, NULL);
+			itd_atomisp_ioc_g_sensor_mode_data();
 			break;
 
 		case 1008:	/* --priv_data=F, ATOMISP_IOC_G_SENSOR_PRIV_INT_DATA */
-			open_device(NULL);
-			atomisp_ioc_g_priv_int_data(ATOMISP_IOC_G_SENSOR_PRIV_INT_DATA, optarg);
+			itr_iterate(itd_open_device, NULL);
+			itd_atomisp_ioc_g_priv_int_data(ATOMISP_IOC_G_SENSOR_PRIV_INT_DATA, optarg);
 			break;
 
 		case 1010:	/* --motor_priv_data=F, ATOMISP_IOC_G_MOTOR_PRIV_INT_DATA */
-			open_device(NULL);
-			atomisp_ioc_g_priv_int_data(ATOMISP_IOC_G_MOTOR_PRIV_INT_DATA, optarg);
+			itd_open_device(NULL);
+			itd_atomisp_ioc_g_priv_int_data(ATOMISP_IOC_G_MOTOR_PRIV_INT_DATA, optarg);
 			break;
 
 		case 9999:	/* --isp_dump */
-			open_device(NULL);
-			atomisp_memory_dump(optarg);
+			itr_iterate(itd_open_device, NULL);
+			itd_atomisp_memory_dump(optarg);
 			break;
 
 		case 1012:	/* --cvf_parm */
-			atomisp_ioc_s_cvf_params(optarg);
+			itd_atomisp_ioc_s_cvf_params(optarg);
 			break;
 
 		case 1014:	/* --parameters, ATOMISP_IOC_S_PARAMETERS */
-			atomisp_ioc_s_parameters(optarg);
+			itd_atomisp_ioc_s_parameters(optarg);
 			break;
 #endif
 
@@ -2298,13 +2304,13 @@ static void process_commands(int argc, char *argv[])
 			break;
 
 		case 1018:	/* --enumctrl */
-			open_device(NULL);
-			enumerate_controls();
+			itr_iterate(itd_open_device, NULL);
+			itd_enumerate_controls();
 			break;
 
 		case 'c':	/* --ctrl, -c, VIDIOC_QUERYCTRL / VIDIOC_S/G_CTRL / VIDIOC_S/G_EXT_CTRLS */
-			open_device(NULL);
-			request_controls(optarg);
+			itr_iterate(itd_open_device, NULL);
+			itd_request_controls(optarg);
 			break;
 
 		case 'w':	/* -w, --wait */
@@ -2416,14 +2422,14 @@ int v4l2n_cleanup(void)
 	for (vars.pipe = 0; vars.pipe < MAX_PIPES; vars.pipe++) {
 		/* Stop streaming */
 		if (vars.pipes[vars.pipe].streaming)
-			streamon(FALSE);
+			itd_streamon((char*)FALSE);
 
 		/* Free memory */
-		vidioc_querybuf_cleanup();
+		itd_vidioc_querybuf_cleanup();
 		for (i = 0; i < vars.pipes[vars.pipe].num_capture_buffers; i++) {
 			free(vars.pipes[vars.pipe].capture_buffers[i].image);
 		}
-		close_device();
+		itd_close_device(NULL);
 		free(vars.pipes[vars.pipe].output);
 	}
 
