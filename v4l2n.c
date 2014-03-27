@@ -2442,6 +2442,7 @@ int v4l2n_init(void)
 		vars.pipes[i].reqbufs.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 		vars.pipes[i].reqbufs.memory = V4L2_MEMORY_USERPTR;
 	}
+	vars.pipes[0].active = TRUE;
 
 	return 0;
 }
