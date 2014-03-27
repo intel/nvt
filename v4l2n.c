@@ -891,7 +891,15 @@ static void write_file(const char *name, const char *data, int size)
 		error("failed to close file");
 }
 
-static void vidioc_enuminput(void)
+static void itr_iterate(void (*itd)(const char *), const char *arg)
+{
+	for (vars.pipe = 0; vars.pipe < MAX_PIPES; vars.pipe++) {
+		if (!vars.pipes[vars.pipe].active) continue;
+		itd(arg);
+	}
+}
+
+static void itd_vidioc_enuminput(const char *unused)
 {
 	static const struct symbol_list type[] = {
 		{ V4L2_INPUT_TYPE_TUNER, "V4L2_INPUT_TYPE_TUNER" },
@@ -2201,7 +2209,7 @@ static void process_commands(int argc, char *argv[])
 
 		case 1005:	/* --enuminput */
 			open_device(NULL);
-			vidioc_enuminput();
+			itr_iterate(itd_vidioc_enuminput, NULL);
 			break;
 
 		case 'o':
