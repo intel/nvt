@@ -80,6 +80,7 @@ struct pipe {
 	struct capture_buffer capture_buffers[MAX_CAPTURE_BUFFERS];
 	struct ring_buffer ring_buffers[MAX_RING_BUFFERS];
 	bool streaming;
+	bool active;
 	bool msg_full_printed;
 };
 
@@ -671,7 +672,7 @@ static void usage(void)
 		"--shell=CMD	Run shell command CMD\n"
 		"--statistics	Calculate statistics from each frame\n"
 		"--file	<name>	Read commands (options) from given file\n"
-		"--pipe <n>	Select current pipe to operate on\n"
+		"--pipe <n,m,..> Select current pipes to operate on\n"
 		"\n"
 		"List of V4L2 controls syntax: <[V4L2_CID_]control_name_or_id>[+][=value|?|#][,...]\n"
 		"where control_name_or_id is either symbolic name or numerical id.\n"
@@ -1987,6 +1988,30 @@ static void atomisp_ioc_s_parameters(const char *s)
 
 #endif
 
+static void select_pipes(const char *p)
+{
+	int pipes[MAX_PIPES];
+	int n, i;
+
+	for (i = 0; i < MAX_PIPES; i++)
+		vars.pipes[i].active = FALSE;
+
+	n = values_get(pipes, SIZE(pipes), &p);
+	for (i = 0; i < n; i++) {
+		if (pipes[i] < 0 || pipes[i] >= MAX_PIPES)
+			error("Maximum of %i pipes available", MAX_PIPES - 1);
+		vars.pipes[pipes[i]].active = TRUE;
+	}
+
+	print(1, "Selected pipes:");
+	for (i = 0; i < MAX_PIPES; i++) {
+		if (vars.pipes[i].active)
+			print(1, " %i", i);
+	}
+	print(1, "\n");
+	vars.pipe = pipes[0];	/* Set the default pipe. FIXME: temporary */
+}
+
 static void delay(double t)
 {
 	struct timespec ts;
@@ -2297,10 +2322,7 @@ static void process_commands(int argc, char *argv[])
 			break;
 
 		case 1016:	/* --pipe */
-			vars.pipe = atoi(optarg);
-			if (vars.pipe > MAX_PIPES)
-				error("Maximum of %i pipes available", MAX_PIPES - 1);
-			print(1, "Selected pipe %i\n", vars.pipe);
+			select_pipes(optarg);
 			break;
 
 		default:
