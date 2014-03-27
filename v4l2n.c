@@ -1843,7 +1843,7 @@ static void itd_atomisp_ioc_s_parameters(const char *s)
 		{ 'Q' << 8, 0, "ce_config", NULL },
 		 { 'Q'<<8 | 'i', TOKEN_F_ARG, "ce_config.uv_level_min", NULL },
 		 { 'Q'<<8 | 'a', TOKEN_F_ARG, "ce_config.uv_level_max", NULL },
-		{ 'D' << 8, 0, "dvs_6axis_config", NULL },
+//		{ 'D' << 8, 0, "dvs_6axis_config", NULL },
 		{ 'J' << 8, 0, "ob_config", NULL },
 		{ 'P' << 8, 0, "dp_config", NULL },
 		 { 'P'<<8 | 't', TOKEN_F_ARG, "dp_config.threshold", NULL },
@@ -1868,9 +1868,9 @@ static void itd_atomisp_ioc_s_parameters(const char *s)
 		{ 'X' << 8, 0, "xnr_config", NULL },
 		 { 'X'<<8 | 't', TOKEN_F_ARG, "xnr_config.threshold", NULL },
 //		{ 'Z' << 8, 0, "dz_config", NULL },
-		{ 'U' << 8, 0, "yuv2rgb_cc_config", NULL },
-		{ 'H' << 8, 0, "rgb2yuv_cc_config", NULL },
-		{ 'm' << 8, 0, "macc_table", NULL },
+//		{ 'U' << 8, 0, "yuv2rgb_cc_config", NULL },
+//		{ 'H' << 8, 0, "rgb2yuv_cc_config", NULL },
+//		{ 'm' << 8, 0, "macc_table", NULL },
 		{ 'l' << 8, 0, "gamma_table", NULL },
 		{ 'c' << 8, 0, "ctc_table", NULL },
 //		{ 'x' << 8, 0, "xnr_table", NULL },
@@ -1912,7 +1912,7 @@ static void itd_atomisp_ioc_s_parameters(const char *s)
 		.uv_level_min	= 0,
 		.uv_level_max	= 255,
 	};
-	struct atomisp_dvs_6axis_config	dvs_6axis_config = { };
+//	struct atomisp_dvs_6axis_config	dvs_6axis_config = { };
 	struct atomisp_ob_config	ob_config = { };
 	struct atomisp_dp_config	dp_config = {
 		.threshold	= 0xFFFF,
@@ -1930,9 +1930,9 @@ static void itd_atomisp_ioc_s_parameters(const char *s)
 	struct atomisp_3a_config	a3a_config = { };
 	struct atomisp_xnr_config	xnr_config = { };
 //	struct atomisp_dz_config	dz_config = { };
-	struct atomisp_cc_config	yuv2rgb_cc_config = { };
-	struct atomisp_cc_config	rgb2yuv_cc_config = { };
-	struct atomisp_macc_table	macc_table = { };
+//	struct atomisp_cc_config	yuv2rgb_cc_config = { };
+//	struct atomisp_cc_config	rgb2yuv_cc_config = { };
+//	struct atomisp_macc_table	macc_table = { };
 	struct atomisp_gamma_table	gamma_table = { };
 	struct atomisp_ctc_table	ctc_table = { };
 //	struct atomisp_xnr_table	xnr_table = { };
@@ -1956,7 +1956,7 @@ static void itd_atomisp_ioc_s_parameters(const char *s)
 		case 'T': p.tnr_config = &tnr_config; break;
 		case 'M': p.macc_config = &macc_config; break;
 		case 'Q': p.ce_config = &ce_config; break;
-		case 'D': p.dvs_6axis_config = &dvs_6axis_config; break;
+//		case 'D': p.dvs_6axis_config = &dvs_6axis_config; break;
 		case 'J': p.ob_config = &ob_config; break;
 		case 'P': p.dp_config = &dp_config; break;
 		case 'R': p.nr_config = &nr_config; break;
@@ -1965,9 +1965,9 @@ static void itd_atomisp_ioc_s_parameters(const char *s)
 		case 'I': p.gc_config = &gc_config; break;
 		case 'K': p.a3a_config = &a3a_config; break;
 		case 'X': p.xnr_config = &xnr_config; break;
-		case 'U': p.yuv2rgb_cc_config = &yuv2rgb_cc_config; break;
-		case 'H': p.rgb2yuv_cc_config = &rgb2yuv_cc_config; break;
-		case 'm': p.macc_table = &macc_table; break;
+//		case 'U': p.yuv2rgb_cc_config = &yuv2rgb_cc_config; break;
+//		case 'H': p.rgb2yuv_cc_config = &rgb2yuv_cc_config; break;
+//		case 'm': p.macc_table = &macc_table; break;
 		case 'l': p.gamma_table = &gamma_table; break;
 		case 'c': p.ctc_table = &ctc_table; break;
 		case 's': p.shading_table = &shading_table; break;
