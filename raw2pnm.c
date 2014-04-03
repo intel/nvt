@@ -270,13 +270,40 @@ static int convert(void *in_buffer, int in_size, int width, int height, int stri
 {
 	static const int dbpp = 3;
 	int y, x, r, g, b, bpp;
-	int oddrow, oddpix, initrow, initpix;
+	int oddrow, oddpix, initrow, initpix, lumaofs, chromaord;
 	unsigned char *src = NULL;
 	unsigned char *s, *u;
 	unsigned char *d = out_buffer;
 	unsigned int dstride = width * dbpp;
 
 	switch (format) {
+	case V4L2_PIX_FMT_YUYV:
+	case V4L2_PIX_FMT_UYVY:
+	case V4L2_PIX_FMT_YVYU:
+	case V4L2_PIX_FMT_VYUY:
+		if (stride <= 0) stride = width * 2;
+		s = src = duplicate_buffer(in_buffer, in_size, stride * height);
+		lumaofs = (format==V4L2_PIX_FMT_YUYV || format==V4L2_PIX_FMT_YVYU) ? 0 : 1;
+		chromaord = (format==V4L2_PIX_FMT_YUYV || format==V4L2_PIX_FMT_UYVY) ? 0 : 1;
+		for (y = 0; y < height; y++) {
+			unsigned char *s1 = s;
+			unsigned char *d1 = d;
+			int cb = 0, cr = 0;
+			for (x = 0; x < width; x++) {
+				int b = s1[lumaofs];
+				if ((x & 1) == chromaord)
+					cb = s1[lumaofs^1];
+				else
+					cr = s1[lumaofs^1];
+				yuv_to_rgb(d1, b, cb, cr);
+				s1 += 2;
+				d1 += dbpp;
+			}
+			s += stride;
+			d += dstride;
+		}
+		break;
+
 	case V4L2_PIX_FMT_NV12:
 		if (stride <= 0) stride = width;
 		s = src = duplicate_buffer(in_buffer, in_size, stride * height*3/2);
