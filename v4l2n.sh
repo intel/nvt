@@ -29,6 +29,8 @@ if [ "$P" = "-a" ]; then
 	P="$P -o $V4L2N_DIR/testimage_@.raw"
 fi
 
+$ADB root
+$ADB remount
 $ADB shell 'mount -o remount -w /dev/block/mmcblk0p6 /system'
 $ADB shell rm "$V4L2N_DIR/testimage_*.raw"
 $ADB push v4l2n /system/ && \
