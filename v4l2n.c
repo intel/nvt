@@ -567,6 +567,7 @@ static void print(int lvl, char *msg, ...)
 	va_start(ap, msg);
 	vprintf(msg, ap);
 	va_end(ap);
+	fflush(stdout);
 }
 
 static void error(char *msg, ...)
