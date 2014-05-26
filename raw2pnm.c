@@ -310,6 +310,8 @@ static int convert(void *in_buffer, int in_size, int width, int height, int stri
 		break;
 
 	case V4L2_PIX_FMT_NV12:
+	case V4L2_PIX_FMT_NV21:
+		chromaord = (format == V4L2_PIX_FMT_NV12) ? 0 : 1;
 		if (stride <= 0) stride = width;
 		s = src = duplicate_buffer(in_buffer, in_size, stride * height*3/2);
 		u = &s[height * stride];
@@ -319,8 +321,8 @@ static int convert(void *in_buffer, int in_size, int width, int height, int stri
 			unsigned char *d1 = d;
 			for (x = 0; x < width; x++) {
 				int b = *s1;
-				int cb = u1[0];
-				int cr = u1[1];
+				int cb = u1[chromaord];
+				int cr = u1[chromaord ^ 1];
 				yuv_to_rgb(d1, b, cb, cr);
 				s1 += 1;
 				d1 += dbpp;
