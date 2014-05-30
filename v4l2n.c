@@ -1220,9 +1220,12 @@ static void itd_vidioc_querybuf(const char *unused)
 			rb->mmap_p = p;
 			rb->start = p;
 		} else if (rb->querybuf.memory == V4L2_MEMORY_USERPTR) {
-			void *p = malloc(PAGE_ALIGN(vars.pipes[vars.pipe].format.fmt.pix.sizeimage) + _PAGE_SIZE - 1);
+			static const int FILLER = 0xFE;
+			int s = PAGE_ALIGN(vars.pipes[vars.pipe].format.fmt.pix.sizeimage) + _PAGE_SIZE - 1;
+			void *p = malloc(s);
 			if (p == NULL)
 				error("malloc failed");
+			memset(p, FILLER, s);
 			rb->malloc_p = p;
 			rb->start = PAGE_ALIGN(p);
 		}
