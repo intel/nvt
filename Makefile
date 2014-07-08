@@ -4,7 +4,7 @@ PROGS = v4l2n v4l2n-example raw2pnm yuv2yuv txt2raw pnm2txt
 .PHONY: all clean
 all: $(PROGS)
 
-v4l2n: v4l2n.c v4l2n.h linux/videodev2.h linux/v4l2-controls.h linux/v4l2-common.h linux/compiler.h linux/atomisp.h
+v4l2n: v4l2n.c v4l2n.h linux/videodev2.h linux/v4l2-subdev.h linux/v4l2-controls.h linux/v4l2-common.h linux/compiler.h linux/atomisp.h
 	gcc -c $(OPT) $@.c -o lib$@.o
 	gcc $(OPT) lib$@.o -o $@
 

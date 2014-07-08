@@ -22,6 +22,7 @@
 #include <stdint.h>
 #include <setjmp.h>
 #include "linux/videodev2.h"
+#include "linux/v4l2-subdev.h"
 
 #define USE_ATOMISP	1
 
@@ -648,6 +649,8 @@ static void usage(void)
 		"-a [N]		Capture N [1] buffers with QBUF/DQBUF\n"
 		"--capture=[N]\n"
 		"--stream=[N]	Capture N [1] buffers with QBUF/DQBUF and leave streaming on\n"
+		"--subdev_frame_interval=X\n"
+		"		Set/get subdev frame interval\n"
 		"-x [EC,EF,AG,DG] Set coarse_itg, fine_itg, analog gain, and digital gain [ATOMISP]\n"
 		"--exposure	(ATOMISP_IOC_S_EXPOSURE)\n"
 		"--sensor_mode_data\n"
@@ -1702,6 +1705,43 @@ static void itd_enumerate_controls(const char *unused)
 	}
 }
 
+static void itd_subdev_frame_interval(const char *s)
+{
+	static const struct token_list list[] = {
+		{ 'p', TOKEN_F_ARG, "pad", NULL },
+		{ 'i', TOKEN_F_ARG|TOKEN_F_ARG2, "interval", NULL },
+		TOKEN_END
+	};
+	struct v4l2_subdev_frame_interval p;
+
+	CLEAR(p);
+
+	while (*s && *s!='?') {
+		int val[4];
+		switch (token_get(list, &s, val)) {
+		case 'p': p.pad = val[0]; break;
+		case 'i':
+			p.interval.numerator = val[0];
+			p.interval.denominator = val[1];
+			break;
+		}
+	}
+
+	if (*s == '?') {
+		print(1, "VIDIOC_SUBDEV_G_FRAME_INTERVAL\n");
+		itd_xioctl(VIDIOC_SUBDEV_G_FRAME_INTERVAL, &p);
+	} else {
+		print(1, "VIDIOC_SUBDEV_S_FRAME_INTERVAL\n");
+	}
+
+	print(2, ": pad:       %i\n", p.pad);
+	print(2, ": interval:  %i/%i\n", p.interval.numerator, p.interval.denominator);
+
+	if (*s != '?') {
+		itd_xioctl(VIDIOC_SUBDEV_S_FRAME_INTERVAL, &p);
+	}
+}
+
 #if USE_ATOMISP
 static void itd_atomisp_ioc_s_exposure(const char *arg)
 {
@@ -2199,6 +2239,7 @@ static void process_commands(int argc, char *argv[])
 			{ "streamoff", 0, NULL, 'e' },
 			{ "capture", 2, NULL, 'a' },
 			{ "stream", 2, NULL, 1006 },
+			{ "subdev_frame_interval", 1, NULL, 1019 },
 			{ "exposure", 1, NULL, 'x' },
 			{ "sensor_mode_data", 0, NULL, 1011 },
 			{ "priv_data", 2, NULL, 1008 },
@@ -2301,6 +2342,10 @@ static void process_commands(int argc, char *argv[])
 
 		case 1006:	/* --stream=N: capture N buffers and leave streaming on */
 			itr_stream(optarg ? atoi(optarg) : 1);
+			break;
+
+		case 1019:	/* --subdev_frame_interval=X */
+			itr_iterate(itd_subdev_frame_interval, optarg);
 			break;
 
 #if USE_ATOMISP
