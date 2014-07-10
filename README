@@ -171,6 +171,24 @@ raw images in still mode using this command:
 This example was from Saltbay, where extra padding is added to raw captured
 images. The "@" character in file name is replaced with frame number.
 
+The default gains give a greenish image. You may adjust white balance by
+changing red, green, and blue gains as follows:
+
+	./v4l2n.sh -o /cache/testimage_@.raw --device /dev/video2 --input 1 \
+	--parm type=1,capturemode=CI_MODE_PREVIEW \
+	--fmt type=1,width=1920,height=1080,pixelformat=NV12 \
+	--reqbufs count=2,memory=USERPTR --exposure=5400,0,0,256 --stream=0 \
+	--parameters=wb_config.r=32768,wb_config.gr=21043,wb_config.gb=21043,wb_config.b=30863 \
+	--stream=2
+	for i in 0 1;do \
+		adb pull /cache/testimage_00$i.raw .; \
+		./raw2pnm -x1920 -y1080 -fNV12 testimage_00$i.raw testimage_00$i.pnm;\
+	done 
+
+This example was from Moorefield and illustrates the usage of Intel-specific
+VIDIOC_S_PARAMETERS (--parameters) call. The call requires that streaming
+has been first started, which is done with --stream=0 option.
+
 Display list of image formats supported by v4l2n:
 	./v4l2n --fmt-list
 Note that neither AtomISP driver nor raw2pnm supports all of these. Use
