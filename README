@@ -171,6 +171,17 @@ raw images in still mode using this command:
 This example was from Saltbay, where extra padding is added to raw captured
 images. The "@" character in file name is replaced with frame number.
 
+Here is raw capture command for secondary camera of MOFD PR1:
+	./v4l2n.sh  -o /cache/testimage_@.raw \
+	--device /dev/video0 --input 0 \
+	--parm type=1,capturemode=CI_MODE_STILL_CAPTURE \
+	--cvf_parm=0,0,0 --exposure=1102,0,140,256 \
+	--fmt type=1,width=1936,height=1200,pixelformat=SRGGB10 \
+	--reqbufs count=1,memory=USERPTR \
+	--capture=2
+
+	./raw2pnm -x2048 -y1200 -fSRGGB10 testimage_001.raw testimage_001.pnm
+
 The default gains give a greenish image. You may adjust white balance by
 changing red, green, and blue gains as follows:
 
