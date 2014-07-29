@@ -219,14 +219,15 @@ MOFD PR2 and captures 1920x1080 video with 1280x720 preview:
 Display list of image formats supported by v4l2n:
 	./v4l2n --fmt-list
 Note that neither AtomISP driver nor raw2pnm supports all of these. Use
-SGRBG10 to capture raw Bayer images and NV12 to capture images in YUV
-colorspace. Currently raw2pnm supports only conversion of NV12 images into
-pnm files, support for SGRBG10 will be probably added later.
+SGRBG10 or its variant to capture raw Bayer images and NV12 or NV21 to capture
+images in YUV colorspace. 
 
 Convert raw NV12 file into pnm file:
-	./raw2pnm -x 640 -y 480 -f NV12 testimage_001.raw testimage_001.pnm
+	./raw2pnm -x640 -y480 -fNV12 testimage_001.raw testimage_001.pnm
 Remember to check the resolution, it should match with what v4l2n tells
-that the driver uses.
+that the driver uses ie. what the VIDIOC_S_FMT ioctl returns. If the buffer
+has padding, you can use -s BPL option where BPL is the same value
+as bytesperline returned from VIDIOC_S_FMT.
 
 == References ==
 	git://git-amr-4.devtools.intel.com/v4l2n-source.git
