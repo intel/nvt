@@ -200,6 +200,22 @@ This example was from Moorefield and illustrates the usage of Intel-specific
 VIDIOC_S_PARAMETERS (--parameters) call. The call requires that streaming
 has been first started, which is done with --stream=0 option.
 
+Video capture is another use case which requires simultaneous configuration
+of two pipes, for video stream and preview stream. This command works on
+MOFD PR2 and captures 1920x1080 video with 1280x720 preview:
+
+	./v4l2n.sh --pipe=2 -o /cache/testimage2_@.raw --device=/dev/video2 \
+	--input=1 --ctrl=ATOMISP_VIDEO_STABLIZATION=0 --exposure=2000,0,0,256 \
+	--pipe=3 -o /cache/testimage3_@.raw --device=/dev/video3 \
+	--parm type=1,capturemode=CI_MODE_VIDEO \
+	--fmt type=1,width=1920,height=1080,pixelformat=NV12 \
+	--pipe=2 --fmt=type=1,width=1280,height=720,pixelformat=NV12 \
+	--pipe=3 --reqbufs count=9,memory=USERPTR \
+	--pipe=2 --reqbufs count=9,memory=USERPTR --pipe 2,3 --capture=2
+	for i in /cache/testimage2_001.raw /cache/testimage3_001.raw;do adb pull $i .;done
+	./raw2pnm -x1280 -y720 -fNV12 testimage2_001.raw testimage2_001.pnm
+	./raw2pnm -x1920 -y1080 -fNV12 testimage3_001.raw testimage3_001.pnm
+
 Display list of image formats supported by v4l2n:
 	./v4l2n --fmt-list
 Note that neither AtomISP driver nor raw2pnm supports all of these. Use
