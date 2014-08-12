@@ -134,7 +134,7 @@ static void error(char *msg, ...)
 
 static void usage(void)
 {
-	print(1,"Usage: %s [-x width] [-y height] [-s stride] [-f format] [inputfile] [outputfile]\n", name);
+	print(1,"Usage: %s [-x width] [-y height] [-s stride] [-f format] [-b skip bytes] [inputfile] [outputfile]\n", name);
 }
 
 static const char *symbol_str(int id, const struct symbol_list list[])
@@ -437,9 +437,10 @@ int main(int argc, char *argv[])
 	int width = -1;
 	int height = -1;
 	int stride = -1;
+	int skip = 0;
 	__u32 format = 0;
 
-	while ((opt = getopt(argc, argv, "hf:x:y:s:")) != -1) {
+	while ((opt = getopt(argc, argv, "hf:x:y:s:b:")) != -1) {
 		switch (opt) {
 		case 'f': {
 			const char *t = optarg;
@@ -455,6 +456,9 @@ int main(int argc, char *argv[])
 		case 's':
 			stride = atoi(optarg);
 			break;
+		case 'b':
+			skip = atoi(optarg);
+			break;
 		default:
 			usage();
 			print(1, "Available formats:\n");
@@ -469,13 +473,16 @@ int main(int argc, char *argv[])
 	in_name = argv[optind++];
 	out_name = argv[optind++];
 
-	print(1, "Reading file `%s', %ix%i stride %i format %s\n",
-		in_name, width, height, stride, symbol_str(format, pixelformats));
+	print(1, "Reading file `%s', %ix%i stride %i format %s, skip %i\n",
+		in_name, width, height, stride, symbol_str(format, pixelformats), skip);
 	f = fopen(in_name, "rb");
 	if (!f) error("failed opening file");
 	in_size = fsize(f);
 	if (in_size == -1) error("error checking file size");
-	print(2, "File size %i bytes\n", in_size);
+	print(2, "File size %i bytes, data size %i bytes\n", in_size, in_size - skip);
+	if (skip >= in_size) error("no data left to read");
+	if (fseek(f, skip, SEEK_SET) != 0) error("seeking failed");
+	in_size -= skip;
 	in_buffer = malloc(in_size);
 	if (!in_buffer) error("can not allocate input buffer");
 	i = fread(in_buffer, in_size, 1, f);
