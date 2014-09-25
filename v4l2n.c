@@ -830,7 +830,10 @@ static const char *symbol_str(int id, const struct symbol_list list[])
 		else
 			sprintf(buffer, "%s [0x%08X]", list[i].symbol, id);
 	} else {
-		sprintf(buffer, "%i", id);
+		if (id < 1000)
+			sprintf(buffer, "%i", id);
+		else
+			sprintf(buffer, "0x%08X", id);
 	}
 	return buffer;
 }
