@@ -24,6 +24,8 @@
 #include "linux/videodev2.h"
 #include "linux/v4l2-subdev.h"
 
+#define LOGPREFIX	"V4L2N> "
+
 #define USE_ATOMISP	1
 
 #if USE_ATOMISP
@@ -87,6 +89,7 @@ struct pipe {
 
 static struct {
 	int verbosity;
+	FILE *logfile;
 	bool save_images;
 	bool calculate_stats;
 	struct timeval start_time;
@@ -560,12 +563,21 @@ static const struct symbol_list v4l2_memory[] = {
 
 static void print(int lvl, char *msg, ...)
 {
+	static bool firstcol = TRUE;
 	va_list ap;
 
 	if (vars.verbosity < lvl)
 		return;
 
 	va_start(ap, msg);
+	if (vars.logfile) {
+		if (firstcol)
+			fprintf(vars.logfile, LOGPREFIX);
+		vfprintf(vars.logfile, msg, ap);
+		if (msg[0] != 0)
+			firstcol = msg[strlen(msg) - 1]=='\n';
+		fflush(vars.logfile);
+	}
 	vprintf(msg, ap);
 	va_end(ap);
 	fflush(stdout);
@@ -578,11 +590,21 @@ static void error(char *msg, ...)
 	int e = errno;
 
 	va_start(ap, msg);
+	if (vars.logfile) {
+		fprintf(vars.logfile, LOGPREFIX);
+		fprintf(vars.logfile, "%s: ", name);
+		vfprintf(vars.logfile, msg, ap);
+		if (e)
+			fprintf(vars.logfile, ": %s (%i)", strerror(e), e);
+		fprintf(vars.logfile, "\n");
+		fflush(vars.logfile);
+	}
 	fprintf(f, "%s: ", name);
 	vfprintf(f, msg, ap);
 	if (e)
 		fprintf(f, ": %s (%i)", strerror(e), e);
 	fprintf(f, "\n");
+	fflush(f);
 	va_end(ap);
 	longjmp(vars.exception, 1);
 	exit(1);
@@ -629,6 +651,8 @@ static void usage(void)
 		"--verbose	increase message verbosity\n"
 		"-q\n"
 		"--quiet	decrease message verbosity\n"
+		"--log[=X]	output messages also to log file,\n"
+		"-l		default /dev/kmsg\n"
 		"-d		open /dev/videoX device node\n"
 		"--device\n"
 		"--open\n"
@@ -2231,6 +2255,7 @@ static void process_commands(int argc, char *argv[])
 			{ "help", 0, NULL, 'h' },
 			{ "verbose", 2, NULL, 'v' },
 			{ "quiet", 0, NULL, 'q' },
+			{ "log", 2, NULL, 'l' },
 			{ "device", 1, NULL, 'd' },	/* Synonym for --open for backwards compatibility */
 			{ "open", 1, NULL, 'd' },
 			{ "close", 0, NULL, 1017 },
@@ -2267,7 +2292,7 @@ static void process_commands(int argc, char *argv[])
 			{ 0, 0, 0, 0 }
 		};
 
-		int c = getopt_long(argc, argv, "hv::qd:i:o:p:t:f:r:soa::x:c:w::", long_options, NULL);
+		int c = getopt_long(argc, argv, "hv::ql::d:i:o:p:t:f:r:soa::x:c:w::", long_options, NULL);
 		if (c == -1)
 			break;
 
@@ -2286,6 +2311,14 @@ static void process_commands(int argc, char *argv[])
 
 		case 'q':	/* --quiet, -q */
 			vars.verbosity--;
+			break;
+
+		case 'l':	/* --log, -l */
+			if (vars.logfile)
+				fclose(vars.logfile);
+			vars.logfile = fopen(optarg ? optarg : "/dev/kmsg", "w");
+			if (!vars.logfile)
+				error("opening log file failed");
 			break;
 
 		case 'd':	/* --device, --open, -d */
@@ -2528,6 +2561,10 @@ int v4l2n_cleanup(void)
 		itd_close_device(NULL);
 		free(vars.pipes[vars.pipe].output);
 	}
+
+	if (vars.logfile)
+		fclose(vars.logfile);
+	vars.logfile = NULL;
 
 	return 0;
 }
