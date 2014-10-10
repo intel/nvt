@@ -625,6 +625,10 @@ static void usage(void)
 	print(1,"Usage: %s [-h] [-d device]\n", name);
 	print(1,"-h		Show this help\n"
 		"--help\n"
+		"-v\n"
+		"--verbose	increase message verbosity\n"
+		"-q\n"
+		"--quiet	decrease message verbosity\n"
 		"-d		open /dev/videoX device node\n"
 		"--device\n"
 		"--open\n"
