@@ -1,4 +1,9 @@
-/* v4l2n: V4L2 CLI */
+/*
+ * v4l2n: V4L2 CLI
+ *
+ * Copyright (c) 2011-2014 Intel Corporation. All Rights Reserved.
+ *
+ */
 
 #include "v4l2n.h"
 
@@ -644,6 +649,10 @@ static void *ralloc(void *p, int s)
 
 static void usage(void)
 {
+	print(1,"v4l2n: V4L2 CLI\n"
+		"\n"
+		"Copyright (c) 2011-2014 Intel Corporation. All Rights Reserved.\n"
+		"\n");
 	print(1,"Usage: %s [-h] [-d device]\n", name);
 	print(1,"-h		Show this help\n"
 		"--help\n"
