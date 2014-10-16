@@ -2207,8 +2207,12 @@ static void shell(char *cmd)
 	if (pid < 0)
 		error("fork failed");
 	if (!pid) {
-		execvp(cmd, argv);
-		error("execvp failed");
+		r = setjmp(vars.exception);	/* Clear exception handling */
+		if (!r) {
+			execvp(cmd, argv);
+			error("execvp failed");
+		}
+		while (1) exit(1);
 	}
 	r = waitpid(pid, &status, 0);
 	if (r < 0)
