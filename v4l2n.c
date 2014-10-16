@@ -721,7 +721,8 @@ static void usage(void)
 		"-c $	(VIDIOC_QUERYCTRL / VIDIOC_S/G_CTRL / VIDIOC_S/G_EXT_CTRLS)\n"
 		"-w [x]		Wait of x seconds (may be fractional)\n"
 		"--wait\n"
-		"--waitkey	Wait for character input from stdin\n"
+		"--waitkey[=file]\n"
+		"		Read a line from given file (default stdin)\n"
 		"--shell=CMD	Run shell command CMD\n"
 		"--statistics	Calculate statistics from each frame\n"
 		"--file	<name>	Read commands (options) from given file\n"
@@ -2310,7 +2311,7 @@ static void process_commands(int argc, char *argv[])
 			{ "enumctrl", 0, NULL, 1018 },
 			{ "ctrl", 1, NULL, 'c' },
 			{ "wait", 2, NULL, 'w' },
-			{ "waitkey", 0, NULL, 1009 },
+			{ "waitkey", 2, NULL, 1009 },
 			{ "shell", 1, NULL, 1007 },
 			{ "statistics", 0, NULL, 1013 },
 			{ "file", 1, NULL, 1015 },
@@ -2473,9 +2474,12 @@ static void process_commands(int argc, char *argv[])
 
 		case 1009: {	/* --waitkey */
 			char b[256] = { 0 };
+			FILE *f = optarg ? fopen(optarg, "r") : stdin;
 			int l;
-			print(1, "WAITKEY...");
-			fgets(b, sizeof(b), stdin);
+			if (!f) error("could not open file for reading a line");
+			print(1, "WAITKEY from %s...", optarg ? optarg : "stdin");
+			fgets(b, sizeof(b), f);
+			if (optarg) fclose(f);
 			l = strlen(b);
 			if (l>0 && b[l-1]=='\n') b[l-1] = 0;
 			print(1, "got `%s'\n", b);
