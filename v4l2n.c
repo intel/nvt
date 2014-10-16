@@ -2395,12 +2395,12 @@ static void process_commands(int argc, char *argv[])
 			itr_iterate(itd_vidioc_reqbufs, optarg);
 			break;
 
-		case 's':	/* --streamoff, -o, VIDIOC_STREAMOFF: stop streaming */
-			itr_iterate(itd_streamon, (char*)FALSE);
+		case 's':	/* --streamon, -s, VIDIOC_STREAMON: start streaming */
+			itr_iterate(itd_streamon, (char*)TRUE);
 			break;
 
-		case 'e':	/* --streamon, -s, VIDIOC_STREAMON: start streaming */
-			itr_iterate(itd_streamon, (char*)TRUE);
+		case 'e':	/* --streamoff, -e, VIDIOC_STREAMOFF: stop streaming */
+			itr_iterate(itd_streamon, (char*)FALSE);
 			break;
 
 		case 'a':	/* --capture=N, -a: capture N buffers using QBUF/DQBUF */
