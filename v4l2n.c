@@ -662,7 +662,7 @@ static void *ralloc(void *p, int s)
 
 static void usage(void)
 {
-	print(1,"v4l2n: V4L2 CLI\n"
+	print(1,"v4l2n: V4L2 CLI compiled " __DATE__ " " __TIME__ "\n"
 		"Copyright (c) 2011-2014 Intel Corporation. All Rights Reserved.\n"
 		"\n"
 		"Usage: %s [-h] [-d device]\n"
