@@ -566,6 +566,15 @@ static const struct symbol_list v4l2_memory[] = {
 	SYMBOL_END
 };
 
+static char *get_pipestring(void)
+{
+	static char buf[5];
+	if (vars.pipe < 0 || vars.pipe >= MAX_PIPES)
+		return "";
+	snprintf(buf, sizeof(buf), "p%u: ", vars.pipe);
+	return buf;
+}
+
 static void print(int lvl, char *msg, ...)
 {
 	static bool firstcol = TRUE;
@@ -576,14 +585,18 @@ static void print(int lvl, char *msg, ...)
 
 	va_start(ap, msg);
 	if (vars.logfile) {
-		if (firstcol)
+		if (firstcol) {
 			fprintf(vars.logfile, LOGPREFIX);
+			fprintf(vars.logfile, "%s", get_pipestring());
+		}
 		vfprintf(vars.logfile, msg, ap);
-		if (msg[0] != 0)
-			firstcol = msg[strlen(msg) - 1]=='\n';
 		fflush(vars.logfile);
 	}
+	if (firstcol)
+		printf("%s", get_pipestring());
 	vprintf(msg, ap);
+	if (msg[0] != 0)
+		firstcol = msg[strlen(msg) - 1]=='\n';
 	va_end(ap);
 	fflush(stdout);
 }
@@ -597,14 +610,14 @@ static void error(char *msg, ...)
 	va_start(ap, msg);
 	if (vars.logfile) {
 		fprintf(vars.logfile, LOGPREFIX);
-		fprintf(vars.logfile, "%s: ", name);
+		fprintf(vars.logfile, "%s%s: ", get_pipestring(), name);
 		vfprintf(vars.logfile, msg, ap);
 		if (e)
 			fprintf(vars.logfile, ": %s (%i)", strerror(e), e);
 		fprintf(vars.logfile, "\n");
 		fflush(vars.logfile);
 	}
-	fprintf(f, "%s: ", name);
+	fprintf(f, "%s%s: ", get_pipestring(), name);
 	vfprintf(f, msg, ap);
 	if (e)
 		fprintf(f, ": %s (%i)", strerror(e), e);
@@ -650,11 +663,10 @@ static void *ralloc(void *p, int s)
 static void usage(void)
 {
 	print(1,"v4l2n: V4L2 CLI\n"
-		"\n"
 		"Copyright (c) 2011-2014 Intel Corporation. All Rights Reserved.\n"
-		"\n");
-	print(1,"Usage: %s [-h] [-d device]\n", name);
-	print(1,"-h		Show this help\n"
+		"\n"
+		"Usage: %s [-h] [-d device]\n"
+		"-h		Show this help\n"
 		"--help\n"
 		"-v\n"
 		"--verbose	increase message verbosity\n"
@@ -718,7 +730,8 @@ static void usage(void)
 		"List of V4L2 controls syntax: <[V4L2_CID_]control_name_or_id>[+][=value|?|#][,...]\n"
 		"where control_name_or_id is either symbolic name or numerical id.\n"
 		"When + is given, use extended controls, otherwise use old-style control call.\n"
-		"\"=\" sets the value, \"?\" gets the current value, and \"#\" shows control info.\n");
+		"\"=\" sets the value, \"?\" gets the current value, and \"#\" shows control info.\n",
+			name);
 }
 
 static void symbol_dump(const char *prefix, const struct symbol_list *list)
