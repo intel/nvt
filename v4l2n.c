@@ -2455,8 +2455,13 @@ static void process_commands(int argc, char *argv[])
 			break;
 
 		case 1009: {	/* --waitkey */
-			char b[256];
+			char b[256] = { 0 };
+			int l;
+			print(1, "WAITKEY...");
 			fgets(b, sizeof(b), stdin);
+			l = strlen(b);
+			if (l>0 && b[l-1]=='\n') b[l-1] = 0;
+			print(1, "got `%s'\n", b);
 			break;
 		}
 
