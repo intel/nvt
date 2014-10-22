@@ -1,6 +1,8 @@
 	V4L2N Image and Video test tool
 	-------------------------------
-	Copyright 2011-2014 Intel
+
+	Copyright (C) 2011-2014 Intel Corporation.
+	All Rights Reserved
 	Author: Tuukka Toivonen <tuukka.toivonen@intel.com>
 
 = Introduction =
@@ -39,19 +41,9 @@ to Android. To run on Android/x86, only adb is required to be properly
 installed. In Windows, adb requires special USB drivers, but on Linux
 that is not needed.
 
-= Obtaining and Compiling =
-
-v4l2n anonymous repository is on TeamForge:
-	git://git-amr-4.devtools.intel.com/v4l2n-source.git
-	http://git-amr-4.devtools.intel.com/gerrit/gitweb?p=v4l2n-source.git
-you can clone the source tree with:
-	git clone git://git-amr-4.devtools.intel.com/v4l2n-source.git
-Precompiled binary packages are also available on TeamForge project v4l2n.
-You may need TeamForge account to access these.
-
+= Compilation =
 
 Compilation:
-	cd v4l2n-source
 	make
 
 This should create v4l2n which is the main binary and raw2pnm which
@@ -101,8 +93,8 @@ VIDIOC_G_EXT_CTRLS. Use a hash character "#" to query control
 Since v4l2n is a very low-level tool, the user must specify exactly what
 he or she wants to do. This may lead to quite long command lines.
 For Linux host users, there is alternatively a script v4l2n.sh designed
-to interface with Android using adb. Automatic image capture can be launched
-with host Linux command lines:
+to interface with x86-based Android devices with adb. Automatic image
+capture can be launched with host Linux command lines:
 	export V4L2N_INPUT=X
 	./v4l2n.sh -a
 where X is 0 or 1, depending whether main or secondary camera is to be
@@ -138,7 +130,7 @@ where 12 is coarse exposure, 34 is fine exposure, 56 is analog gain,
 and 78 is digital gain. These are directly register values.
 
 This example runs eternal viewfinder with adb (works from Windows prompt too),
-the parameters are for CSS1.5 (Clovertrail):
+the parameters are for Clovertrail:
 	adb root
 	adb remount
 	adb push v4l2n /system/
@@ -157,7 +149,7 @@ file:
 	adb pull /cache/testimage_001.raw .
 	./raw2pnm -x1920 -y1080 -fNV12 testimage_001.raw testimage_001.pnm
 
-CSS2.0/2.1 (Merrifield, Moorefield) enable offline mode by default for still
+Merrifield and Moorefield enable offline mode by default for still
 capture. This requires configuring two video pipes. To avoid that, you can
 use option --cvf_parm=0,0,0 to switch to online mode. Then you could capture
 raw images in still mode using this command:
@@ -171,7 +163,7 @@ raw images in still mode using this command:
 This example was from Saltbay, where extra padding is added to raw captured
 images. The "@" character in file name is replaced with frame number.
 
-Here is raw capture command for secondary camera of MOFD PR1:
+Here is raw capture command for secondary camera of Moorefield PR1:
 	./v4l2n.sh  -o /cache/testimage_@.raw \
 	--device /dev/video0 --input 0 \
 	--parm type=1,capturemode=CI_MODE_STILL_CAPTURE \
@@ -202,7 +194,7 @@ has been first started, which is done with --stream=0 option.
 
 Video capture is another use case which requires simultaneous configuration
 of two pipes, for video stream and preview stream. This command works on
-MOFD PR2 and captures 1920x1080 video with 1280x720 preview:
+Moorefield PR2 and captures 1920x1080 video with 1280x720 preview:
 
 	./v4l2n.sh --pipe=2 -o /cache/testimage2_@.raw --device=/dev/video2 \
 	--input=1 --ctrl=ATOMISP_VIDEO_STABLIZATION=0 --exposure=2000,0,0,256 \
@@ -230,11 +222,8 @@ has padding, you can use -s BPL option where BPL is the same value
 as bytesperline returned from VIDIOC_S_FMT.
 
 == References ==
-	git://git-amr-4.devtools.intel.com/v4l2n-source.git
-		(v4l2n repository)
 	http://hverkuil.home.xs4all.nl/spec/media.html
 	http://git.ideasonboard.org/yavta.git
 		(yet another simple V4L2 testing tool)
 
 ---
-
