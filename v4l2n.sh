@@ -34,6 +34,7 @@ $ADB remount
 $ADB shell 'mount -o remount -w /dev/block/mmcblk0p6 /system'
 $ADB shell rm "$V4L2N_DIR/testimage_*.raw"
 $ADB push v4l2n /system/ && \
+$ADB shell chmod 0777 /system/v4l2n
 $ADB shell "/system/v4l2n --enuminput" && \
 echo "/system/v4l2n $P" && \
 $ADB shell "/system/v4l2n $P"
