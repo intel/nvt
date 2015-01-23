@@ -1562,6 +1562,36 @@ static void itd_open_device(const char *device)
 
 static void itd_vidioc_querycap(const char *unused)
 {
+#define V4L2_CAP_FLAG	"V4L2_CAP_"
+#define CAP_FLAG(id)	{ V4L2_CAP_##id, (#id) }
+
+	static const struct symbol_list cap_flags[] = {
+		CAP_FLAG(VIDEO_CAPTURE),
+		CAP_FLAG(VIDEO_OUTPUT),
+		CAP_FLAG(VIDEO_OVERLAY),
+		CAP_FLAG(VBI_CAPTURE),
+		CAP_FLAG(VBI_OUTPUT),
+		CAP_FLAG(SLICED_VBI_CAPTURE),
+		CAP_FLAG(SLICED_VBI_OUTPUT),
+		CAP_FLAG(RDS_CAPTURE),
+		CAP_FLAG(VIDEO_OUTPUT_OVERLAY),
+		CAP_FLAG(HW_FREQ_SEEK),
+		CAP_FLAG(RDS_OUTPUT),
+		CAP_FLAG(VIDEO_CAPTURE_MPLANE),
+		CAP_FLAG(VIDEO_OUTPUT_MPLANE),
+		CAP_FLAG(VIDEO_M2M_MPLANE),
+		CAP_FLAG(VIDEO_M2M),
+		CAP_FLAG(TUNER),
+		CAP_FLAG(AUDIO),
+		CAP_FLAG(RADIO),
+		CAP_FLAG(MODULATOR),
+		CAP_FLAG(READWRITE),
+		CAP_FLAG(ASYNCIO),
+		CAP_FLAG(STREAMING),
+		CAP_FLAG(DEVICE_CAPS),
+		SYMBOL_END
+	};
+
 	struct v4l2_capability c;
 
 	CLEAR(c);
@@ -1571,6 +1601,8 @@ static void itd_vidioc_querycap(const char *unused)
 	print(2, "> card:         `%.32s'\n", c.card);
 	print(2, "> bus_info:     `%.32s'\n", c.bus_info);
 	print(2, "> version:      %i.%u.%u\n", c.version >> 16, (c.version >> 8) & 0xFF, c.version & 0xFF);
+	print(2, "> capabilities: %s\n", symbol_flag_str(c.capabilities, cap_flags));
+	print(2, "> device_caps:  %s\n", symbol_flag_str(c.device_caps, cap_flags));
 }
 
 static void itd_vidioc_sg_input(const char *arg)
