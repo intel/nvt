@@ -1,5 +1,5 @@
 OPT = -Wall -m32 -static -g -I.
-PROGS = v4l2n v4l2n-example raw2pnm yuv2yuv txt2raw pnm2txt
+PROGS = v4l2n v4l2n-example raw2pnm yuv2yuv pnm2yuv txt2raw pnm2txt
 
 .PHONY: all clean
 all: $(PROGS)
@@ -16,6 +16,9 @@ raw2pnm: raw2pnm.c
 
 yuv2yuv: yuv2yuv.c
 	gcc $(OPT) $@.c -o $@
+
+pnm2yuv: pnm2yuv.c
+	gcc $(OPT) utillib.o $@.c -o $@
 
 txt2raw: txt2raw.c utillib.o
 	gcc $(OPT) utillib.o $@.c -o $@
