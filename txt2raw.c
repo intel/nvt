@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include "utillib.h"
 
 static void error(char *s)
 {
@@ -18,22 +19,6 @@ static int hextoval(int v)
 		return v - 'A' + 10;
 	error("not a hex char");
 	return -1;
-}
-
-static void write_file(const char *name, const unsigned char *data, int size)
-{
-	FILE *f;
-	int r;
-
-	f = fopen(name, "wb");
-	if (!f)
-		error("can not open file");
-	r = fwrite(data, size, 1, f);
-	if (r != 1)
-		error("failed to write data to file");
-	r = fclose(f);
-	if (r != 0)
-		error("failed to close file");
 }
 
 static unsigned char *txt2buf(FILE *f, int size[2])

@@ -17,11 +17,14 @@ raw2pnm: raw2pnm.c
 yuv2yuv: yuv2yuv.c
 	gcc $(OPT) $@.c -o $@
 
-txt2raw: txt2raw.c
-	gcc $(OPT) $@.c -o $@
+txt2raw: txt2raw.c utillib.o
+	gcc $(OPT) utillib.o $@.c -o $@
 
-pnm2txt: pnm2txt.c
-	gcc $(OPT) $@.c -o $@
+pnm2txt: pnm2txt.c utillib.o
+	gcc $(OPT) utillib.o $@.c -o $@
+
+utillib.o: utillib.c
+	gcc $(OPT) -c $< -o $@
 
 clean:
 	rm -f $(PROGS)
