@@ -17,7 +17,7 @@ raw2pnm: raw2pnm.c
 yuv2yuv: yuv2yuv.c
 	gcc $(OPT) $@.c -o $@
 
-pnm2yuv: pnm2yuv.c
+pnm2yuv: pnm2yuv.c utillib.o
 	gcc $(OPT) utillib.o $@.c -o $@
 
 txt2raw: txt2raw.c utillib.o
@@ -30,7 +30,7 @@ utillib.o: utillib.c
 	gcc $(OPT) -c $< -o $@
 
 clean:
-	rm -f $(PROGS)
+	rm -f $(PROGS) utillib.o
 
 .PHONY: release
 release:
