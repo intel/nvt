@@ -682,6 +682,8 @@ static void usage(void)
 		"-i		Set/get input device (VIDIOC_S/G_INPUT)\n"
 		"--input\n"
 		"--enuminput	Enumerate available input devices (VIDIOC_ENUMINPUT)\n"
+		"--enumfmt	Enumerate formats, frame sizes, and frame intervals\n"
+		"		(VIDIOC_ENUM_FMT, VIDIOC_ENUM_FRAMESIZES, VIDIOC_ENUM_FRAMEINTERVALS)\n"
 		"-o FILENAME	Set output filename for captured images\n"
 		"--output\n"
 		"--parm		Set/get parameters (VIDIOC_S/G_PARM)\n"
@@ -989,6 +991,108 @@ static void itd_vidioc_enuminput(const char *unused)
 	} while (r == 0);
 	if (r != -EINVAL)
 		error("VIDIOC_ENUMINPUT failed");
+}
+
+static void itd_vidioc_enum_fmt(const char *arg)
+{
+#define V4L2_FMT_FLAG	"V4L2_FMT_FLAG_"
+#define FMT_FLAG(id)	{ V4L2_FMT_FLAG_##id, (#id) }
+	static const struct symbol_list fmt_flags[] = {
+		FMT_FLAG(COMPRESSED),
+		FMT_FLAG(EMULATED),
+	};
+#define V4L2_FRMSIZE_TYPE	"V4L2_FRMSIZE_TYPE_"
+#define FRMSIZE_TYPE(id)	{ V4L2_FRMSIZE_TYPE_##id, (#id) }
+	static const struct symbol_list v4l2_frmsize_types[] = {
+		FRMSIZE_TYPE(DISCRETE),
+		FRMSIZE_TYPE(CONTINUOUS),
+		FRMSIZE_TYPE(STEPWISE),
+	};
+#define V4L2_FRMIVAL_TYPE	"V4L2_FRMIVAL_TYPE_"
+#define FRMIVAL_TYPE(id)	{ V4L2_FRMIVAL_TYPE_##id, (#id) }
+	static const struct symbol_list v4l2_frmival_types[] = {
+		FRMIVAL_TYPE(DISCRETE),
+		FRMIVAL_TYPE(CONTINUOUS),
+		FRMIVAL_TYPE(STEPWISE),
+	};
+
+	struct v4l2_fmtdesc fmtdesc;
+	struct v4l2_frmsizeenum frmsizeenum;
+	struct v4l2_frmivalenum frmivalenum;
+	int r, id, is, ii;
+	__u32 type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+
+	if (arg)
+		type = symbol_get(v4l2_buf_types, &arg);
+
+	for (id = 0;; id++) {
+		CLEAR(fmtdesc);
+		fmtdesc.index = id;
+		fmtdesc.type  = type;
+		r = itd_xioctl_try(VIDIOC_ENUM_FMT, &fmtdesc);
+		if (r == -EINVAL) { print(2, "-EINVAL\n"); break; }
+		if (r) error("VIDIOC_ENUM_FMT failed");
+		print(1, "VIDIOC_ENUM_FMT (type=%s) %i: ",
+			symbol_str(fmtdesc.type, v4l2_buf_types), fmtdesc.index);
+		print(1, "%s `%.32s' flags %s\n",
+			symbol_str(fmtdesc.pixelformat, pixelformats),
+			fmtdesc.description, symbol_flag_str(fmtdesc.flags, fmt_flags));
+
+		for (is = 0;; is++) {
+			int width = 0, height = 0;
+			CLEAR(frmsizeenum);
+			frmsizeenum.index = is;
+			frmsizeenum.pixel_format = fmtdesc.pixelformat;
+			r = itd_xioctl_try(VIDIOC_ENUM_FRAMESIZES, &frmsizeenum);
+			if (r == -EINVAL) { print(2, "-EINVAL\n"); break; }
+			if (r) error("VIDIOC_ENUM_FRAMESIZES failed");
+			print(1, " VIDIOC_ENUM_FRAMESIZES %i: ", frmsizeenum.index);
+			print(1, "type %s ", symbol_str(frmsizeenum.type, v4l2_frmsize_types));
+			switch (frmsizeenum.type) {
+			case V4L2_FRMSIZE_TYPE_DISCRETE:
+				print(1, "%ix%i", frmsizeenum.discrete.width, frmsizeenum.discrete.height);
+				width  = frmsizeenum.discrete.width;
+				height = frmsizeenum.discrete.height;
+				break;
+			case V4L2_FRMSIZE_TYPE_CONTINUOUS:
+			case V4L2_FRMSIZE_TYPE_STEPWISE:
+				print(1, "%ix%i ... %ix%i [%i,%i]",
+					frmsizeenum.stepwise.min_width, frmsizeenum.stepwise.min_height,
+					frmsizeenum.stepwise.max_width, frmsizeenum.stepwise.max_height,
+					frmsizeenum.stepwise.step_width, frmsizeenum.stepwise.step_height);
+				width  = frmsizeenum.stepwise.min_width;
+				height = frmsizeenum.stepwise.min_height;
+				break;
+			}
+			print(1, "\n");
+
+			for (ii = 0;; ii++) {
+				CLEAR(frmivalenum);
+				frmivalenum.index = ii;
+				frmivalenum.pixel_format = fmtdesc.pixelformat;
+				frmivalenum.width  = width;
+				frmivalenum.height = height;
+				r = itd_xioctl_try(VIDIOC_ENUM_FRAMEINTERVALS, &frmivalenum);
+				if (r == -EINVAL) { print(2, "-EINVAL\n"); break; }
+				if (r) error("VIDIOC_ENUM_FRAMEINTERVALS failed");
+				print(1, "  VIDIOC_ENUM_FRAMEINTERVALS %i: ", frmivalenum.index);
+				print(1, "type %s ", symbol_str(frmivalenum.type, v4l2_frmival_types));
+				switch (frmivalenum.type) {
+				case V4L2_FRMIVAL_TYPE_DISCRETE:
+					print(1, "%i/%i", frmivalenum.discrete.numerator, frmivalenum.discrete.denominator);
+					break;
+				case V4L2_FRMIVAL_TYPE_CONTINUOUS:
+				case V4L2_FRMIVAL_TYPE_STEPWISE:
+					print(1, "%i/%i ... %i/%i [%i/%i]",
+						frmivalenum.stepwise.min.numerator, frmivalenum.stepwise.min.denominator,
+						frmivalenum.stepwise.max.numerator, frmivalenum.stepwise.max.denominator,
+						frmivalenum.stepwise.step.numerator, frmivalenum.stepwise.step.denominator);
+					break;
+				}
+				print(1, "\n");
+			}
+		}
+	}
 }
 
 static void itd_streamon(const char *arg)
@@ -2321,6 +2425,7 @@ static void process_commands(int argc, char *argv[])
 			{ "querycap", 0, NULL, 1001 },
 			{ "input", 1, NULL, 'i' },
 			{ "enuminput", 0, NULL, 1005 },
+			{ "enumfmt", 2, NULL, 1020 },
 			{ "output", 1, NULL, 'o' },
 			{ "parm", 1, NULL, 'p' },
 			{ "try_fmt", 1, NULL, 't' },
@@ -2401,6 +2506,11 @@ static void process_commands(int argc, char *argv[])
 		case 1005:	/* --enuminput */
 			itr_iterate(itd_open_device, NULL);
 			itr_iterate(itd_vidioc_enuminput, NULL);
+			break;
+
+		case 1020:	/* --enumfmt, VIDIOC_ENUM_FMT/FRAMESIZES/FRAMEINTERVALS */
+			itr_iterate(itd_open_device, NULL);
+			itr_iterate(itd_vidioc_enum_fmt, optarg);
 			break;
 
 		case 'o':
