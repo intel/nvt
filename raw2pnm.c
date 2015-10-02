@@ -264,7 +264,6 @@ static inline unsigned int get_word(unsigned char *src, int bpp)
 	} else if (bpp == 2) {
 		unsigned int hi = src[1];
 		unsigned int w = (hi << 8) | lo;
-		w >>= 2;		/* 10 bits per pixel to byte */
 		return w;
 	} else error("bad bpp");
 	return 0;
@@ -274,7 +273,7 @@ static inline unsigned int get_word(unsigned char *src, int bpp)
 static int convert(void *in_buffer, int in_size, int width, int height, int stride, __u32 format, void *out_buffer)
 {
 	static const int dbpp = 3;
-	int y, x, r, g, b, bpp;
+	int y, x, r, g, b, bpp, shift;
 	int oddrow, oddpix, initrow, initpix, lumaofs, chromaord;
 	unsigned char *src = NULL;
 	unsigned char *s, *u;
@@ -370,18 +369,38 @@ static int convert(void *in_buffer, int in_size, int width, int height, int stri
 	case V4L2_PIX_FMT_SGBRG10:
 	case V4L2_PIX_FMT_SRGGB10:
 	case V4L2_PIX_FMT_SGRBG10:
+	case V4L2_PIX_FMT_SBGGR12:		/* 2 bytes per pixel, little endian */
+	case V4L2_PIX_FMT_SGBRG12:
+	case V4L2_PIX_FMT_SRGGB12:
+	case V4L2_PIX_FMT_SGRBG12:
 		if (format == V4L2_PIX_FMT_SBGGR8 ||
-		    format == V4L2_PIX_FMT_SBGGR10) { initrow = 1; initpix = 0; } else
+		    format == V4L2_PIX_FMT_SBGGR10 ||
+		    format == V4L2_PIX_FMT_SBGGR12) { initrow = 1; initpix = 0; } else
 		if (format == V4L2_PIX_FMT_SGBRG8 ||
-		    format == V4L2_PIX_FMT_SGBRG10) { initrow = 1; initpix = 1; } else
+		    format == V4L2_PIX_FMT_SGBRG10 ||
+		    format == V4L2_PIX_FMT_SGBRG12) { initrow = 1; initpix = 1; } else
 		if (format == V4L2_PIX_FMT_SRGGB8 ||
-		    format == V4L2_PIX_FMT_SRGGB10) { initrow = 0; initpix = 1; } else
+		    format == V4L2_PIX_FMT_SRGGB10 ||
+		    format == V4L2_PIX_FMT_SRGGB12) { initrow = 0; initpix = 1; } else
 		if (format == V4L2_PIX_FMT_SGRBG8 ||
-		    format == V4L2_PIX_FMT_SGRBG10) { initrow = 0; initpix = 0; }
-		bpp = (format == V4L2_PIX_FMT_SBGGR8 ||
-		       format == V4L2_PIX_FMT_SGBRG8 ||
-		       format == V4L2_PIX_FMT_SRGGB8 ||
-		       format == V4L2_PIX_FMT_SGRBG8) ? 1 : 2;
+		    format == V4L2_PIX_FMT_SGRBG10 ||
+		    format == V4L2_PIX_FMT_SGRBG12) { initrow = 0; initpix = 0; }
+		if (format == V4L2_PIX_FMT_SBGGR8 ||
+	 	    format == V4L2_PIX_FMT_SGBRG8 ||
+		    format == V4L2_PIX_FMT_SRGGB8 ||
+		    format == V4L2_PIX_FMT_SGRBG8) {
+			bpp = 1;	/* 8 bits per pixel */
+			shift = 0;
+		} else if (format == V4L2_PIX_FMT_SBGGR10 ||
+			   format == V4L2_PIX_FMT_SGBRG10 ||
+		 	   format == V4L2_PIX_FMT_SRGGB10 ||
+			   format == V4L2_PIX_FMT_SGRBG10) {
+			bpp = 2;	/* 10 bits per pixel */
+			shift = 2;
+		} else {
+			bpp = 2;
+			shift = 4;	/* 12 bits per pixel */
+		}
 
 		if (stride <= 0) stride = width * bpp;
 		s = src = duplicate_buffer(in_buffer, in_size, stride * height);
@@ -401,9 +420,9 @@ static int convert(void *in_buffer, int in_size, int width, int height, int stri
 					if ( oddpix) g = get_word(s1, bpp);
 					if ( oddpix && y > 0) r = get_word(s1 - stride, bpp);
 				}
-				d1[0] = r;
-				d1[1] = g;
-				d1[2] = b;
+				d1[0] = r >> shift;
+				d1[1] = g >> shift;
+				d1[2] = b >> shift;
 				s1 += bpp;
 				d1 += dbpp;
 				oddpix ^= 1;
