@@ -1,7 +1,16 @@
 /*
- * v4l2n: V4L2 CLI
+ * v4l2n - Video4Linux2 API tool for developers.
  *
- * Copyright (c) 2011-2014 Intel Corporation. All Rights Reserved.
+ * Copyright (c) 2011-2015 Intel Corporation. All Rights Reserved.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version
+ * 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
  */
 
@@ -663,7 +672,10 @@ static void *ralloc(void *p, int s)
 static void usage(void)
 {
 	print(1,"v4l2n: V4L2 CLI compiled " __DATE__ " " __TIME__ "\n"
-		"Copyright (c) 2011-2014 Intel Corporation. All Rights Reserved.\n"
+		"Copyright (c) 2011-2015 Intel Corporation. All Rights Reserved.\n"
+		"This is free software with ABSOLUTELY NO WARRANTY.\n"
+		"License GPLv2: GNU GPL version 2\n"
+		" <https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html>.\n"
 		"\n"
 		"Usage: %s [-h] [-d device]\n"
 		"-h		Show this help\n"
