@@ -2468,7 +2468,7 @@ static void process_commands(int argc, char *argv[])
 			{ 0, 0, 0, 0 }
 		};
 
-		int c = getopt_long(argc, argv, "hv::ql::d:i:o:p:t:f:r:soa::x:c:w::", long_options, NULL);
+		int c = getopt_long(argc, argv, "hv::ql::d:i:o:p:t:f:r:sea::x:c:w::", long_options, NULL);
 		if (c == -1)
 			break;
 
