@@ -364,7 +364,7 @@ static int convert(void *in_buffer, int in_size, int width, int height, int stri
 {
 	static const int dbpp = 3;
 	int y, x, r, g, b, bpp, shift;
-	int oddrow, oddpix, initrow, initpix, lumaofs, chromaord;
+	int oddrow, oddpix, initrow, initpix, lumaofs, chromaord, subsample;
 	unsigned char *src = NULL;
 	unsigned char *s, *u;
 	unsigned char *d = out_buffer;
@@ -400,9 +400,14 @@ static int convert(void *in_buffer, int in_size, int width, int height, int stri
 
 	case V4L2_PIX_FMT_NV12:
 	case V4L2_PIX_FMT_NV21:
-		chromaord = (format == V4L2_PIX_FMT_NV12) ? 0 : 1;
+	case V4L2_PIX_FMT_NV24:
+	case V4L2_PIX_FMT_NV42:
+		subsample = (format == V4L2_PIX_FMT_NV12 ||
+			     format == V4L2_PIX_FMT_NV21) ? 2 : 1;
+		chromaord = (format == V4L2_PIX_FMT_NV12 ||
+			     format == V4L2_PIX_FMT_NV24) ? 0 : 1;
 		if (stride <= 0) stride = width;
-		s = src = duplicate_buffer(in_buffer, in_size, stride * height*3/2);
+		s = src = duplicate_buffer(in_buffer, in_size, stride * height*3/subsample);
 		u = &s[height * stride];
 		for (y = 0; y < height; y++) {
 			unsigned char *s1 = s;
@@ -415,12 +420,14 @@ static int convert(void *in_buffer, int in_size, int width, int height, int stri
 				yuv_to_rgb(d1, b, cb, cr);
 				s1 += 1;
 				d1 += dbpp;
-				if (x & 1)
+				if (subsample == 1 ||
+				   (subsample == 2 && (x & 1)))
 					u1 += 2;
 			}
 			s += stride;
-			if (y & 1)
-				u += stride;
+			if (subsample == 1 ||
+			   (subsample == 2 && (y & 1)))
+				u += 2 * stride / subsample;
 			d += dstride;
 		}
 		break;
