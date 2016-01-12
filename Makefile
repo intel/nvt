@@ -16,7 +16,7 @@
 # CC=arm-linux-gnueabi-gcc
 CC=gcc
 OPT = -Wall -m32 -static -g -I.
-PROGS = v4l2n v4l2n-example raw2pnm yuv2yuv pnm2yuv txt2raw pnm2txt
+PROGS = v4l2n v4l2n-example raw2pnm pnm2raw yuv2yuv pnm2yuv txt2raw pnm2txt
 
 .PHONY: all clean
 all: $(PROGS)
@@ -30,6 +30,9 @@ v4l2n-example: v4l2n
 
 raw2pnm: raw2pnm.c
 	$(CC) $(OPT) $@.c -o $@
+
+pnm2raw: pnm2raw.c utillib.o
+	$(CC) $(OPT) utillib.o $@.c -o $@
 
 yuv2yuv: yuv2yuv.c
 	$(CC) $(OPT) $@.c -o $@
