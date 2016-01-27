@@ -365,7 +365,7 @@ static int convert(void *in_buffer, int in_size, int width, int height, int stri
 	static const int dbpp = 3;
 	int y, x, r, g, b, bpp, shift;
 	int oddrow, oddpix, initrow, initpix, lumaofs, chromaord, subsample;
-	unsigned char *src = NULL;
+	unsigned char *src = NULL, *dst = NULL;
 	unsigned char *s, *u;
 	unsigned char *d = out_buffer;
 	unsigned int dstride = width * dbpp;
@@ -458,6 +458,57 @@ static int convert(void *in_buffer, int in_size, int width, int height, int stri
 		}
 		break;
 
+	case V4L2_PIX_FMT_SBGGR10V32:
+	case V4L2_PIX_FMT_SGBRG10V32:
+	case V4L2_PIX_FMT_SGRBG10V32:
+	case V4L2_PIX_FMT_SRGGB10V32:
+	case V4L2_PIX_FMT_SBGGR12V32:
+	case V4L2_PIX_FMT_SGBRG12V32:
+	case V4L2_PIX_FMT_SGRBG12V32:
+	case V4L2_PIX_FMT_SRGGB12V32:
+		if (format == V4L2_PIX_FMT_SBGGR10V32) format = V4L2_PIX_FMT_SBGGR10;
+		if (format == V4L2_PIX_FMT_SGBRG10V32) format = V4L2_PIX_FMT_SGBRG10;
+		if (format == V4L2_PIX_FMT_SGRBG10V32) format = V4L2_PIX_FMT_SGRBG10;
+		if (format == V4L2_PIX_FMT_SRGGB10V32) format = V4L2_PIX_FMT_SRGGB10;
+		if (format == V4L2_PIX_FMT_SBGGR12V32) format = V4L2_PIX_FMT_SBGGR12;
+		if (format == V4L2_PIX_FMT_SGBRG12V32) format = V4L2_PIX_FMT_SGBRG12;
+		if (format == V4L2_PIX_FMT_SGRBG12V32) format = V4L2_PIX_FMT_SGRBG12;
+		if (format == V4L2_PIX_FMT_SRGGB12V32) format = V4L2_PIX_FMT_SRGGB12;
+
+		if (width & 1) error("must be even image width");
+		if (height & 1) error("must be even image height");
+
+		bpp = 2;
+		if (stride <= 0) stride = width * bpp;
+		s = src = duplicate_buffer(in_buffer, in_size, stride * height);
+		d = dst = calloc(1, stride * height);
+
+		for (y = 0; y < height; y += 2) {
+			unsigned char *d0 = d;
+			unsigned char *s0 = s;
+			for (x = 0; x < width; x += 64) {
+				for (b = 0; b < 32; b++) {
+					if (x + b*2 >= width) break;
+					d0[b*4+0] = s0[b*2+0];			// Gr
+					d0[b*4+1] = s0[b*2+1];
+					d0[b*4+2] = s0[b*2+64];			// R
+					d0[b*4+3] = s0[b*2+65];
+					d0[stride+b*4+0] = s0[b*2+128];		// B
+					d0[stride+b*4+1] = s0[b*2+129];
+					d0[stride+b*4+2] = s0[b*2+192];		// Gb
+					d0[stride+b*4+3] = s0[b*2+193];
+				}
+				s0 += 4 * 32 * 2;
+				d0 += 64 * bpp;
+			}
+			d += 2 * stride;
+			s += 2 * stride;
+		}
+
+		r = convert(dst, stride * height, width, height, stride, format, out_buffer);
+		if (r) error("conversion failed");
+		break;
+
 	case V4L2_PIX_FMT_SBGGR8:		/* 1 byte per pixel, little endian */
 	case V4L2_PIX_FMT_SGBRG8:
 	case V4L2_PIX_FMT_SRGGB8:
@@ -536,6 +587,7 @@ static int convert(void *in_buffer, int in_size, int width, int height, int stri
 	}
 
 	free(src);
+	free(dst);
 	return 0;
 }
 
