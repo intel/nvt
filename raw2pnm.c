@@ -38,6 +38,10 @@ struct symbol_list {
 };
 #define SYMBOL_END	{ -1, NULL }
 
+#ifndef V4L2_PIX_FMT_YYUV420_V32
+#define V4L2_PIX_FMT_YYUV420_V32 v4l2_fourcc('y', 'V', '0', 'A') /* Vectorized NV12 */
+#endif
+
 #define V4L2_PIX_FMT	"V4L2_PIX_FMT_"
 #define PIXFMT(id)	{ V4L2_PIX_FMT_##id, (#id) }
 static const struct symbol_list pixelformats[] = {
@@ -189,6 +193,7 @@ static const struct symbol_list pixelformats[] = {
 	PIXFMT(SE401),
 	PIXFMT(S5C_UYVY_JPG),
 	PIXFMT(SMIAPP_META_8),
+	PIXFMT(YYUV420_V32),
 	PIXFMT(PRIV_MAGIC),
 	PIXFMT(FLAG_PREMUL_ALPHA),
 	SYMBOL_END
