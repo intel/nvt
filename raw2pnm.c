@@ -21,6 +21,7 @@
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdint.h>
 #include "linux/videodev2.h"
 
 #define MIN(a,b)	((a) <= (b) ? (a) : (b))
@@ -436,6 +437,44 @@ static int convert(void *in_buffer, int in_size, int width, int height, int stri
 			d += dstride;
 		}
 		break;
+
+	case V4L2_PIX_FMT_YYUV420_V32: {
+		static const int VEC_SIZE = (64 + 2*32 + 64) * 2;	/* In bytes */
+		static const int LUMA_SHIFT = 8;			/* In theory 8, 7 gives brighter image */
+		static const int CHROMA_SHIFT = 6;			/* Should be verified */
+
+		if (width & 63) print(0, "WARNING: width would be better to be multiple of 64\n");
+		if (height & 1) error("height must be multiple of 2");
+
+		stride = width;		/*	 Stride on the input buffer is meaningless, so overwrite it */
+		s = src = duplicate_buffer(in_buffer, in_size, 2 * width * height * 3/2);
+		d = dst = calloc(1, stride * height * 3/2);
+
+		for (y = 0; y < height; y += 2) {
+			for (x = 0; x < width; x += 64) {
+				int y0, x0, p, c;
+				/* Luma */
+				for (y0 = 0; y0 < 2; y0++) for (x0 = 0; x0 < 64; x0++) {
+					uint16_t *s0 = (uint16_t *)s;
+					int x1 = (x0 & 31) | (y0 << 5);
+					int y1 = (x0 & 32) >> 5;
+					p = s0[y1 * 128 + x1] >> LUMA_SHIFT;
+					d[(y+y0)*stride + x+x0] = CLAMPB(p);
+				}
+				/* Chroma */
+				for (x0 = 0; x0 < 32; x0++) for (c = 0; c < 2; c++) {
+					int16_t *s0 = (int16_t *)s;
+					p = s0[64 + x0 + 32 * c];
+					d[stride*height + stride*(y/2) + x + x0*2 + c] =
+							CLAMPB((p >> CHROMA_SHIFT) + 128);
+				}
+				s += VEC_SIZE;
+			}
+		}
+		r = convert(dst, stride * height * 3/2, width, height, stride, V4L2_PIX_FMT_NV12, out_buffer);
+		if (r) error("conversion failed");
+		break;
+	}
 
 	case V4L2_PIX_FMT_GREY:
 	case V4L2_PIX_FMT_Y16:
