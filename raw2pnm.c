@@ -565,9 +565,11 @@ static int convert(void *in_buffer, int in_size, int width, int height, int stri
 	case V4L2_PIX_FMT_SGBRG12:
 	case V4L2_PIX_FMT_SRGGB12:
 	case V4L2_PIX_FMT_SGRBG12:
+	case V4L2_PIX_FMT_SBGGR16:
 		if (format == V4L2_PIX_FMT_SBGGR8 ||
 		    format == V4L2_PIX_FMT_SBGGR10 ||
-		    format == V4L2_PIX_FMT_SBGGR12) { initrow = 1; initpix = 0; } else
+		    format == V4L2_PIX_FMT_SBGGR12 ||
+		    format == V4L2_PIX_FMT_SBGGR16) { initrow = 1; initpix = 0; } else
 		if (format == V4L2_PIX_FMT_SGBRG8 ||
 		    format == V4L2_PIX_FMT_SGBRG10 ||
 		    format == V4L2_PIX_FMT_SGBRG12) { initrow = 1; initpix = 1; } else
@@ -589,9 +591,15 @@ static int convert(void *in_buffer, int in_size, int width, int height, int stri
 			   format == V4L2_PIX_FMT_SGRBG10) {
 			bpp = 2;	/* 10 bits per pixel */
 			shift = 2;
-		} else {
+		} else if (format == V4L2_PIX_FMT_SBGGR12 ||
+			   format == V4L2_PIX_FMT_SGBRG12 ||
+		 	   format == V4L2_PIX_FMT_SRGGB12 ||
+			   format == V4L2_PIX_FMT_SGRBG12) {
 			bpp = 2;
 			shift = 4;	/* 12 bits per pixel */
+		} else {
+			bpp = 2;
+			shift = 8;	/* 16 bits per pixel */
 		}
 
 		if (stride <= 0) stride = width * bpp;
