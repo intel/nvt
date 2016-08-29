@@ -577,20 +577,28 @@ static int convert(void *in_buffer, int in_size, int width, int height, int stri
 	case V4L2_PIX_FMT_SGBRG12:
 	case V4L2_PIX_FMT_SRGGB12:
 	case V4L2_PIX_FMT_SGRBG12:
+	case V4L2_PIX_FMT_SBGGR14:		/* 2 bytes per pixel, little endian */
+	case V4L2_PIX_FMT_SGBRG14:
+	case V4L2_PIX_FMT_SRGGB14:
+	case V4L2_PIX_FMT_SGRBG14:
 	case V4L2_PIX_FMT_SBGGR16:
 		if (format == V4L2_PIX_FMT_SBGGR8 ||
 		    format == V4L2_PIX_FMT_SBGGR10 ||
 		    format == V4L2_PIX_FMT_SBGGR12 ||
+		    format == V4L2_PIX_FMT_SBGGR14 ||
 		    format == V4L2_PIX_FMT_SBGGR16) { initrow = 1; initpix = 0; } else
 		if (format == V4L2_PIX_FMT_SGBRG8 ||
 		    format == V4L2_PIX_FMT_SGBRG10 ||
-		    format == V4L2_PIX_FMT_SGBRG12) { initrow = 1; initpix = 1; } else
+		    format == V4L2_PIX_FMT_SGBRG12 ||
+		    format == V4L2_PIX_FMT_SGBRG14) { initrow = 1; initpix = 1; } else
 		if (format == V4L2_PIX_FMT_SRGGB8 ||
 		    format == V4L2_PIX_FMT_SRGGB10 ||
-		    format == V4L2_PIX_FMT_SRGGB12) { initrow = 0; initpix = 1; } else
+		    format == V4L2_PIX_FMT_SRGGB12 ||
+		    format == V4L2_PIX_FMT_SRGGB14) { initrow = 0; initpix = 1; } else
 		if (format == V4L2_PIX_FMT_SGRBG8 ||
 		    format == V4L2_PIX_FMT_SGRBG10 ||
-		    format == V4L2_PIX_FMT_SGRBG12) { initrow = 0; initpix = 0; }
+		    format == V4L2_PIX_FMT_SGRBG12 ||
+		    format == V4L2_PIX_FMT_SGRBG14) { initrow = 0; initpix = 0; }
 		if (format == V4L2_PIX_FMT_SBGGR8 ||
 	 	    format == V4L2_PIX_FMT_SGBRG8 ||
 		    format == V4L2_PIX_FMT_SRGGB8 ||
@@ -609,6 +617,12 @@ static int convert(void *in_buffer, int in_size, int width, int height, int stri
 			   format == V4L2_PIX_FMT_SGRBG12) {
 			bpp = 2;
 			shift = 4;	/* 12 bits per pixel */
+		} else if (format == V4L2_PIX_FMT_SBGGR14 ||
+			   format == V4L2_PIX_FMT_SGBRG14 ||
+		 	   format == V4L2_PIX_FMT_SRGGB14 ||
+			   format == V4L2_PIX_FMT_SGRBG14) {
+			bpp = 2;
+			shift = 6;	/* 14 bits per pixel */
 		} else {
 			bpp = 2;
 			shift = 8;	/* 16 bits per pixel */
