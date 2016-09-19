@@ -514,6 +514,31 @@ static int convert(void *in_buffer, int in_size, int width, int height, int stri
 		}
 		break;
 
+	case V4L2_PIX_FMT_BGR24:
+	case V4L2_PIX_FMT_RGB24:
+		bpp = 3;
+		if (stride <= 0) stride = width * bpp;
+		s = src = duplicate_buffer(in_buffer, in_size, stride * height);
+		for (y = 0; y < height; y++) {
+			unsigned char *s1 = s;
+			unsigned char *d1 = d;
+			for (x = 0; x < width; x++) {
+				if (format == V4L2_PIX_FMT_RGB24) {
+					d1[0] = s1[0];
+					d1[2] = s1[2];
+				} else {
+					d1[0] = s1[2];
+					d1[2] = s1[0];
+				}
+				d1[1] = s1[1];
+				s1 += bpp;
+				d1 += dbpp;
+			}
+			s += stride;
+			d += dstride;
+		}
+		break;
+
 	case V4L2_PIX_FMT_SBGGR10V32:
 	case V4L2_PIX_FMT_SGBRG10V32:
 	case V4L2_PIX_FMT_SGRBG10V32:
