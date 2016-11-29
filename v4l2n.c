@@ -71,6 +71,8 @@ typedef unsigned char bool;
 
 static char *name = "v4l2n";
 
+static const int FILLER = 0xFE;
+
 /* Holds information returned by QUERYBUF and needed
  * for subsequent QBUF/DQBUF. Buffers are reused for long sequences. */
 struct ring_buffer {
@@ -91,6 +93,9 @@ struct capture_buffer {
 struct pipe {
 	int fd;
 	char *output;
+	void *bufdata;		/* Data to be stored into buffers for driver */
+	unsigned int bufdata_length;
+	unsigned int bufdata_pos;	/* Current read position */
 	struct v4l2_format format;
 	struct v4l2_requestbuffers reqbufs;
 	int num_capture_buffers;
@@ -844,6 +849,7 @@ static void usage(void)
 		"--statistics	Calculate statistics from each frame\n"
 		"--file	<name>	Read commands (options) from given file\n"
 		"--pipe <n,m,..> Select current pipes to operate on\n"
+		"--load <name>	Load buffer data from file for driver\n"
 		"\n"
 		"List of V4L2 controls syntax: <[V4L2_CID_]control_name_or_id>[+][=value|?|#][,...]\n"
 		"where control_name_or_id is either symbolic name or numerical id.\n"
@@ -1496,7 +1502,6 @@ static void itd_vidioc_querybuf(const char *unused)
 			rb->mmap_p = p;
 			rb->start = p;
 		} else if (rb->querybuf.memory == V4L2_MEMORY_USERPTR) {
-			static const int FILLER = 0xFE;
 			int s = PAGE_ALIGN(vars.pipes[vars.pipe].format.fmt.pix.sizeimage) + _PAGE_SIZE - 1;
 			void *p = malloc(s);
 			if (p == NULL)
@@ -1626,6 +1631,7 @@ static void itd_vidioc_qbuf(void)
 {
 	enum v4l2_buf_type t = vars.pipes[vars.pipe].reqbufs.type;
 	enum v4l2_memory m = vars.pipes[vars.pipe].reqbufs.memory;
+	__u32 sizeimage = vars.pipes[vars.pipe].format.fmt.pix.sizeimage;
 	struct v4l2_buffer b;
 	int i;
 
@@ -1641,10 +1647,26 @@ static void itd_vidioc_qbuf(void)
 
 	if (m == V4L2_MEMORY_USERPTR) {
 		b.m.userptr = (unsigned long)vars.pipes[vars.pipe].ring_buffers[i].start;
-		b.length = vars.pipes[vars.pipe].format.fmt.pix.sizeimage;
+		b.length = sizeimage;
 	} else if (m == V4L2_MEMORY_MMAP) {
 		/* Nothing here */
 	} else error("unsupported capture memory");
+
+	if (t == V4L2_BUF_TYPE_VIDEO_OUTPUT ||
+	    t == V4L2_BUF_TYPE_VIDEO_OVERLAY ||
+	    t == V4L2_BUF_TYPE_VIDEO_OUTPUT_OVERLAY)
+		b.bytesused = sizeimage;
+
+	memset(vars.pipes[vars.pipe].ring_buffers[i].start, FILLER, sizeimage);
+	if (vars.pipes[vars.pipe].bufdata) {
+		memcpy(vars.pipes[vars.pipe].ring_buffers[i].start,
+		       vars.pipes[vars.pipe].bufdata + vars.pipes[vars.pipe].bufdata_pos,
+		       MIN(vars.pipes[vars.pipe].bufdata_length - vars.pipes[vars.pipe].bufdata_pos,
+		           sizeimage));
+		vars.pipes[vars.pipe].bufdata_pos += sizeimage;
+		if (vars.pipes[vars.pipe].bufdata_pos >= vars.pipes[vars.pipe].bufdata_length)
+			vars.pipes[vars.pipe].bufdata_pos = 0;
+	}
 
 	print(1, "VIDIOC_QBUF index:%i\n", i);
 	print_buffer(&b, '>');
@@ -2403,6 +2425,31 @@ static void itd_output_name(const char *arg)
 	vars.save_images = TRUE;
 }
 
+static void itd_load_bufdata(const char *arg)
+{
+	int length;
+	int r;
+	void *p;
+	FILE *f;
+
+	free(vars.pipes[vars.pipe].bufdata);
+	vars.pipes[vars.pipe].bufdata = NULL;
+
+	f = fopen(arg, "rb");			if (!f) error("failed to open file `%s'", arg);
+	r = fseek(f, 0, SEEK_END);		if (r < 0) error("failed to seek file");
+	length = ftell(f);			if (length <= 0) error("failed to get file size");
+	r = fseek(f, 0, SEEK_SET);		if (r < 0) error("failed to seek file");
+	p = ralloc(NULL, length);		if (!p) error("out of memory");
+
+	print(1, "Reading buffer (%i bytes) from `%s'\n", length, arg);
+	vars.pipes[vars.pipe].bufdata = p;
+	vars.pipes[vars.pipe].bufdata_length = length;
+	vars.pipes[vars.pipe].bufdata_pos = 0;
+
+	r = fread(p, length, 1, f);		if (r != 1) error("failed to read file");
+	fclose(f);
+}
+
 static void select_pipes(const char *p)
 {
 	int pipes[MAX_PIPES];
@@ -2568,6 +2615,7 @@ static void process_commands(int argc, char *argv[])
 			{ "statistics", 0, NULL, 1013 },
 			{ "file", 1, NULL, 1015 },
 			{ "pipe", 1, NULL, 1016 },
+			{ "load", 1, NULL, 1021 },
 			{ 0, 0, 0, 0 }
 		};
 
@@ -2759,6 +2807,10 @@ static void process_commands(int argc, char *argv[])
 			select_pipes(optarg);
 			break;
 
+		case 1021:	/* --load */
+			itr_iterate(itd_load_bufdata, optarg);
+			break;
+
 		default:
 			error("unknown option");
 		}
@@ -2852,6 +2904,7 @@ int v4l2n_cleanup(void)
 		}
 		itd_close_device(NULL);
 		free(vars.pipes[vars.pipe].output);
+		free(vars.pipes[vars.pipe].bufdata);
 	}
 
 	if (vars.logfile)
