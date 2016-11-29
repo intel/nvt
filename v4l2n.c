@@ -1313,7 +1313,8 @@ static void itd_vidioc_parm(const char *s)
 static void print_v4l2_format(int v, struct v4l2_format *f, char c)
 {
 	print(v, "%c type:          %s\n", c, symbol_str(f->type, v4l2_buf_types));
-	if (f->type == V4L2_BUF_TYPE_VIDEO_CAPTURE) {
+	if (f->type == V4L2_BUF_TYPE_VIDEO_CAPTURE ||
+	    f->type == V4L2_BUF_TYPE_VIDEO_OUTPUT) {
 		print(v, "%c width:         %i\n", c, f->fmt.pix.width);
 		print(v, "%c height:        %i\n", c, f->fmt.pix.height);
 		print(v, "%c pixelformat:   %s\n", c, symbol_str(f->fmt.pix.pixelformat, pixelformats));
