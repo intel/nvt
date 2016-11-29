@@ -2420,6 +2420,7 @@ static void itd_atomisp_ioc_s_parameters(const char *s)
 
 static void itd_output_name(const char *arg)
 {
+	free(vars.pipes[vars.pipe].output);
 	vars.pipes[vars.pipe].output = strdup(arg);
 	if (!vars.pipes[vars.pipe].output) error("out of memory");
 	vars.save_images = TRUE;
