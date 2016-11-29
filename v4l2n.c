@@ -708,6 +708,8 @@ static void print(int lvl, char *msg, ...)
 		}
 		vfprintf(vars.logfile, msg, ap);
 		fflush(vars.logfile);
+		va_end(ap);
+		va_start(ap, msg);
 	}
 	if (firstcol)
 		printf("%s", get_pipestring());
