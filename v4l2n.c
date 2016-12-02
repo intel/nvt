@@ -1313,7 +1313,8 @@ static void itd_vidioc_parm(const char *s)
 static void print_v4l2_format(int v, struct v4l2_format *f, char c)
 {
 	print(v, "%c type:          %s\n", c, symbol_str(f->type, v4l2_buf_types));
-	if (f->type == V4L2_BUF_TYPE_VIDEO_CAPTURE) {
+	if (f->type == V4L2_BUF_TYPE_VIDEO_CAPTURE ||
+	    f->type == V4L2_BUF_TYPE_VIDEO_OUTPUT) {
 		print(v, "%c width:         %i\n", c, f->fmt.pix.width);
 		print(v, "%c height:        %i\n", c, f->fmt.pix.height);
 		print(v, "%c pixelformat:   %s\n", c, symbol_str(f->fmt.pix.pixelformat, pixelformats));
@@ -1475,7 +1476,10 @@ static void itd_vidioc_querybuf(const char *unused)
 
 	itd_vidioc_querybuf_cleanup();
 
-	if (t != V4L2_BUF_TYPE_VIDEO_CAPTURE)
+	if (t != V4L2_BUF_TYPE_VIDEO_CAPTURE &&
+	    t != V4L2_BUF_TYPE_VIDEO_OUTPUT &&
+	    t != V4L2_BUF_TYPE_VIDEO_OVERLAY &&
+	    t != V4L2_BUF_TYPE_VIDEO_OUTPUT_OVERLAY)
 		error("unsupported operation type");
 
 	if (vars.pipes[vars.pipe].reqbufs.memory != V4L2_MEMORY_MMAP &&
