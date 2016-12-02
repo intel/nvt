@@ -1313,8 +1313,7 @@ static void itd_vidioc_parm(const char *s)
 static void print_v4l2_format(int v, struct v4l2_format *f, char c)
 {
 	print(v, "%c type:          %s\n", c, symbol_str(f->type, v4l2_buf_types));
-	if (f->type == V4L2_BUF_TYPE_VIDEO_CAPTURE ||
-	    f->type == V4L2_BUF_TYPE_VIDEO_OUTPUT) {
+	if (f->type == V4L2_BUF_TYPE_VIDEO_CAPTURE) {
 		print(v, "%c width:         %i\n", c, f->fmt.pix.width);
 		print(v, "%c height:        %i\n", c, f->fmt.pix.height);
 		print(v, "%c pixelformat:   %s\n", c, symbol_str(f->fmt.pix.pixelformat, pixelformats));
@@ -1340,9 +1339,8 @@ static void itd_vidioc_fmt(bool try, const char *s)
 		{ 'r', TOKEN_F_ARG, "priv", NULL },
 		TOKEN_END
 	};
-	struct v4l2_format p;
+	struct v4l2_format p = vars.pipes[vars.pipe].format;
 
-	CLEAR(p);
 	p.type = vars.pipes[vars.pipe].reqbufs.type;
 
 	while (*s && *s!='?') {
@@ -1370,8 +1368,9 @@ static void itd_vidioc_fmt(bool try, const char *s)
 		print(1, "VIDIOC_S_FMT\n");
 		print_v4l2_format(3, &p, '<');
 		itd_xioctl(VIDIOC_S_FMT, &p);
-		vars.pipes[vars.pipe].format = p;
 	}
+	if (!try)
+		vars.pipes[vars.pipe].format = p;
 	print_v4l2_format(2, &p, '>');
 }
 
