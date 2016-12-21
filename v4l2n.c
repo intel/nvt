@@ -1495,7 +1495,7 @@ static void print_buffer(struct v4l2_buffer *b, char c)
 	if (b->memory == V4L2_MEMORY_MMAP)
 	print(v, "%c offset:    0x%08X\n", c, b->m.offset);
 	else if (b->memory == V4L2_MEMORY_USERPTR)
-	print(v, "%c userptr:   0x%08X\n", c, b->m.userptr);
+	print(v, "%c userptr:   0x%08lX\n", c, b->m.userptr);
 	print(v, "%c length:    %i\n", c, b->length);
 //	print(v, "%c input:     %i\n", c, b->input);
 }
