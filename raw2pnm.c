@@ -24,6 +24,8 @@
 #include <stdint.h>
 #include "linux/videodev2.h"
 
+#include "extradefs.h"
+
 #define MIN(a,b)	((a) <= (b) ? (a) : (b))
 #define MAX(a,b)	((a) >= (b) ? (a) : (b))
 #define CLAMP(a,lo,hi)	((a) < (lo) ? (lo) : (a) > (hi) ? (hi) : (a))

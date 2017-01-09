@@ -21,14 +21,14 @@ PROGS = v4l2n v4l2n-example raw2pnm pnm2raw yuv2yuv pnm2yuv txt2raw pnm2txt
 .PHONY: all clean
 all: $(PROGS)
 
-v4l2n: v4l2n.c v4l2n.h linux/videodev2.h linux/v4l2-subdev.h linux/v4l2-controls.h linux/v4l2-common.h linux/compiler.h linux/atomisp.h
+v4l2n: v4l2n.c v4l2n.h extradefs.h linux/videodev2.h linux/v4l2-subdev.h linux/v4l2-controls.h linux/v4l2-common.h linux/compiler.h linux/atomisp.h
 	$(CC) -c $(OPT) $@.c -o lib$@.o
 	$(CC) $(OPT) lib$@.o -o $@
 
 v4l2n-example: v4l2n
 	$(CC) $(OPT) $@.c -o $@ libv4l2n.o
 
-raw2pnm: raw2pnm.c
+raw2pnm: raw2pnm.c extradefs.h
 	$(CC) $(OPT) $@.c -o $@
 
 pnm2raw: pnm2raw.c utillib.o

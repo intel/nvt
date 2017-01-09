@@ -15,6 +15,7 @@
  */
 
 #include "v4l2n.h"
+#include "extradefs.h"
 
 #include <stdio.h>
 #include <errno.h>
@@ -503,10 +504,6 @@ static const struct symbol_list v4l2_buf_types[] = {
 	BUFTYPE(PRIVATE),
 	SYMBOL_END
 };
-
-#ifndef V4L2_PIX_FMT_YYUV420_V32
-#define V4L2_PIX_FMT_YYUV420_V32 v4l2_fourcc('y', 'V', '0', 'A') /* Vectorized NV12 */
-#endif
 
 #define V4L2_PIX_FMT	"V4L2_PIX_FMT_"
 #define PIXFMT(id)	{ V4L2_PIX_FMT_##id, (#id) }
