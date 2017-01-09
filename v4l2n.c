@@ -680,6 +680,38 @@ static const struct symbol_list v4l2_memory[] = {
 	SYMBOL_END
 };
 
+static const struct symbol_list v4l2_queryctrl_type[] = {
+	{ V4L2_CTRL_TYPE_INTEGER,      "V4L2_CTRL_TYPE_INTEGER" },
+	{ V4L2_CTRL_TYPE_BOOLEAN,      "V4L2_CTRL_TYPE_BOOLEAN" },
+	{ V4L2_CTRL_TYPE_MENU,         "V4L2_CTRL_TYPE_MENU" },
+	{ V4L2_CTRL_TYPE_BUTTON,       "V4L2_CTRL_TYPE_BUTTON" },
+	{ V4L2_CTRL_TYPE_INTEGER64,    "V4L2_CTRL_TYPE_INTEGER64" },
+	{ V4L2_CTRL_TYPE_CTRL_CLASS,   "V4L2_CTRL_TYPE_CTRL_CLASS" },
+	{ V4L2_CTRL_TYPE_STRING,       "V4L2_CTRL_TYPE_STRING" },
+	{ V4L2_CTRL_TYPE_BITMASK,      "V4L2_CTRL_TYPE_BITMASK" },
+	{ V4L2_CTRL_TYPE_INTEGER_MENU, "V4L2_CTRL_TYPE_INTEGER_MENU" },
+	/* Compound types are >= 0x0100 */
+	{ V4L2_CTRL_TYPE_U8,           "V4L2_CTRL_TYPE_U8" },
+	{ V4L2_CTRL_TYPE_U16,          "V4L2_CTRL_TYPE_U16" },
+	{ V4L2_CTRL_TYPE_U32,          "V4L2_CTRL_TYPE_U32" },
+	{ V4L2_CTRL_TYPE_PRIVATE,      "V4L2_CTRL_TYPE_PRIVATE" },
+	SYMBOL_END
+};
+
+static const struct symbol_list v4l2_queryctrl_flags[] = {
+	{ V4L2_CTRL_FLAG_DISABLED,         "V4L2_CTRL_FLAG_DISABLED" },
+	{ V4L2_CTRL_FLAG_GRABBED,          "V4L2_CTRL_FLAG_GRABBED" },
+	{ V4L2_CTRL_FLAG_READ_ONLY,        "V4L2_CTRL_FLAG_READ_ONLY" },
+	{ V4L2_CTRL_FLAG_UPDATE,           "V4L2_CTRL_FLAG_UPDATE" },
+	{ V4L2_CTRL_FLAG_INACTIVE,         "V4L2_CTRL_FLAG_INACTIVE" },
+	{ V4L2_CTRL_FLAG_SLIDER,           "V4L2_CTRL_FLAG_SLIDER" },
+	{ V4L2_CTRL_FLAG_WRITE_ONLY,       "V4L2_CTRL_FLAG_WRITE_ONLY" },
+	{ V4L2_CTRL_FLAG_VOLATILE,         "V4L2_CTRL_FLAG_VOLATILE" },
+	{ V4L2_CTRL_FLAG_HAS_PAYLOAD,      "V4L2_CTRL_FLAG_HAS_PAYLOAD" },
+	{ V4L2_CTRL_FLAG_EXECUTE_ON_WRITE, "V4L2_CTRL_FLAG_EXECUTE_ON_WRITE" },
+	SYMBOL_END
+};
+
 static char *get_pipestring(void)
 {
 	static char buf[5];
@@ -1938,11 +1970,11 @@ static int itd_v4l2_query_ctrl(__u32 id, int errout)
 		return r;
 
 	print(1, "VIDIOC_QUERYCTRL[%s] =\n", get_control_name(id));
-	print(2, "> type:    %i\n", q.type);
+	print(2, "> type:    %s\n", symbol_str(q.type, v4l2_queryctrl_type));
 	print(2, "> name:    `%.32s'\n", q.name);
 	print(2, "> limits:  %i..%i / %i\n", q.minimum, q.maximum, q.step);
 	print(2, "> default: %i\n", q.default_value);
-	print(2, "> flags:   %i\n", q.flags);
+	print(2, "> flags:   %s\n", symbol_flag_str(q.flags, v4l2_queryctrl_flags));
 	return 0;
 }
 
