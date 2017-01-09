@@ -1978,6 +1978,39 @@ static int itd_v4l2_query_ctrl(__u32 id, int errout)
 	return 0;
 }
 
+static int itd_v4l2_query_ext_ctrl(__u32 id, int errout)
+{
+	char dims[V4L2_CTRL_MAX_DIMS * 11 + 11] = "<none>";
+	struct v4l2_query_ext_ctrl q;
+	int n, i, r = 0;
+
+	CLEAR(q);
+	q.id = id;
+	if (errout)
+		itd_xioctl(VIDIOC_QUERY_EXT_CTRL, &q);
+	else
+		r = itd_xioctl_try(VIDIOC_QUERY_EXT_CTRL, &q);
+	if (r)
+		return r;
+
+	for (n = 0, i = 0; i < MIN(q.nr_of_dims, V4L2_CTRL_MAX_DIMS); i++)
+		n += sprintf(&dims[n], "%u,", q.dims[i]);
+	if (n > 1)
+		dims[n - 1] = 0;
+
+	print(1, "VIDIOC_QUERY_EXT_CTRL[%s] =\n", get_control_name(id));
+	print(2, "> type:       %s\n", symbol_str(q.type, v4l2_queryctrl_type));
+	print(2, "> name:       `%.32s'\n", q.name);
+	print(2, "> limits:     %li..%li / %lu\n", (long)q.minimum, (long)q.maximum, (long)q.step);
+	print(2, "> default:    %li\n", (long)q.default_value);
+	print(2, "> flags:      %s\n", symbol_flag_str(q.flags, v4l2_queryctrl_flags));
+	print(2, "> elem_size:  %u\n", q.elem_size);
+	print(2, "> elems:      %u\n", q.elems);
+	print(2, "> nr_of_dims: %u\n", q.nr_of_dims);
+	print(2, "> dims:       %s\n", dims);
+	return 0;
+}
+
 static __s32 itd_v4l2_g_ext_ctrl(__u32 id)
 {
 	struct v4l2_ext_controls cs;
@@ -2047,7 +2080,10 @@ static void itd_request_controls(const char *start)
 			if (*value == ',')
 				next = TRUE;
 			end = value + 1;
-			itd_v4l2_query_ctrl(id, 1);
+			if (ext)
+				itd_v4l2_query_ext_ctrl(id, 1);
+			else
+				itd_v4l2_query_ctrl(id, 1);
 		} else error("bad request for control");
 		start = end;
 	} while (next);
