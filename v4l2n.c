@@ -1085,7 +1085,7 @@ static void print_time(void)
 	print(1, "[%3i.%06i]\n", tv.tv_sec, tv.tv_usec);
 }
 
-static void write_file(const char *name, const char *data, int size)
+static void write_file(const char *name, const void *data, int size)
 {
 	FILE *f;
 	int r;
@@ -1930,10 +1930,14 @@ static __s32 itd_v4l2_g_ctrl(__u32 id)
 	return c.value;
 }
 
-static void itd_v4l2_s_ext_ctrl(__u32 id, __s32 val)
+static void itd_v4l2_s_ext_ctrl(__u32 id, const char *value)
 {
 	struct v4l2_ext_controls cs;
 	struct v4l2_ext_control c;
+	__s32 val;
+
+	if (sscanf(value, "%i", &val) != 1)
+		error("bad extended control value");
 
 	CLEAR(cs);
 	cs.ctrl_class = V4L2_CTRL_ID2CLASS(id);
@@ -2017,10 +2021,17 @@ static int itd_v4l2_query_ext_ctrl(__u32 id, int errout, int *next_id)
 	return 0;
 }
 
-static __s32 itd_v4l2_g_ext_ctrl(__u32 id)
+static void itd_v4l2_g_ext_ctrl(__u32 id, char *opts)
 {
+	char buf[256] = "<truncated>";
 	struct v4l2_ext_controls cs;
 	struct v4l2_ext_control c;
+	unsigned char *ptr = NULL;
+	int i;
+
+	char *type = NULL;
+	unsigned int size = 0;
+	char *filename = NULL;
 
 	CLEAR(cs);
 	cs.ctrl_class = V4L2_CTRL_ID2CLASS(id);
@@ -2030,9 +2041,45 @@ static __s32 itd_v4l2_g_ext_ctrl(__u32 id)
 	CLEAR(c);
 	c.id = id;
 
+	if (opts)
+		sscanf(opts, "%m[^:]:%u:%ms", &type, &size, &filename);
+	if (size > 0) {
+		ptr = ralloc(NULL, size);
+		c.size = size;
+		c.ptr = ptr;
+	}
+
 	itd_xioctl(VIDIOC_G_EXT_CTRLS, &cs);
-	print(1, "VIDIOC_G_EXT_CTRLS[%s] = %i\n", get_control_name(id), c.value);
-	return c.value;
+
+	if (ptr && size*2+1 < SIZE(buf))
+		for (i = 0; i < size; i++) sprintf(&buf[2*i], "%02X", ptr[i]);
+
+	if (!type || strcmp(type, "value") == 0) {
+		print(1, "VIDIOC_G_EXT_CTRLS[%s] = %i\n", get_control_name(id), c.value);
+	} else if (strcmp(type, "value64") == 0) {
+		print(1, "VIDIOC_G_EXT_CTRLS[%s] = %li\n", get_control_name(id), (long)c.value64);
+	} else if (strcmp(type, "string") == 0) {
+		if (!ptr) error("get extended control string: buffer size missing");
+		ptr[size - 1] = 0;
+		print(1, "VIDIOC_G_EXT_CTRLS[%s] = %s\n", get_control_name(id), ptr);
+	} else if (strcmp(type, "p_u8") == 0 ||
+		   strcmp(type, "p_u16") == 0 ||
+		   strcmp(type, "p_u32") == 0 ||
+		   strcmp(type, "ptr") == 0) {
+		if (!ptr) error("get extended control: buffer size missing");
+		print(1, "VIDIOC_G_EXT_CTRLS[%s] = %s\n", get_control_name(id), buf);
+	} else {
+		error("bad extended control type `%s'", type);
+	}
+
+	if (ptr && filename) {
+		print(1, "Writing control %s (%i bytes) to `%s'\n", get_control_name(id), size, filename);
+		write_file(filename, ptr, size);
+	}
+
+	free(filename);
+	free(type);
+	free(ptr);
 }
 
 static int isident(int c)
@@ -2042,7 +2089,7 @@ static int isident(int c)
 
 static void itd_request_controls(const char *start)
 {
-	char *end, *value;
+	char *end, *value, *type;
 	bool ext, next;
 	char op;
 	__u32 id;
@@ -2066,21 +2113,28 @@ static void itd_request_controls(const char *start)
 			if (*end == ',')
 				next = TRUE;
 			if (*end) *end++ = 0;
-			if (sscanf(value, "%i", &val) != 1)
-				error("bad control value");
-			if (ext)
-				itd_v4l2_s_ext_ctrl(id, val);
-			else
+			if (ext) {
+				itd_v4l2_s_ext_ctrl(id, value);
+			} else {
+				if (sscanf(value, "%i", &val) != 1)
+					error("bad control value");
 				itd_v4l2_s_ctrl(id, val);
+			}
 		} else if (op == '?') {
 			/* Get value */
+			if (isident(*value)) {
+				type = value;
+				while (*value && *value != ',') value++;
+			} else
+				type = NULL;
 			if (*value == ',')
 				next = TRUE;
-			end = value + 1;
-			if (ext)
-				itd_v4l2_g_ext_ctrl(id);
-			else
+			*value = 0;
+			if (ext) {
+				itd_v4l2_g_ext_ctrl(id, type);
+			} else
 				itd_v4l2_g_ctrl(id);
+			end = value + 1;
 		} else if (op == '#') {
 			/* Query control */
 			if (*value == ',')
