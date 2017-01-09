@@ -139,8 +139,6 @@ struct token_list {
 #define V4L2_CID	"V4L2_CID_"
 #define CONTROL(id)	{ V4L2_CID_##id, (#id) }
 static const struct symbol_list controls[] = {
-	CONTROL(BASE),
-	CONTROL(USER_BASE),
 	CONTROL(USER_CLASS),
 	CONTROL(BRIGHTNESS),
 	CONTROL(CONTRAST),
@@ -1955,21 +1953,25 @@ static void itd_v4l2_s_ext_ctrl(__u32 id, __s32 val)
 	itd_xioctl(VIDIOC_S_EXT_CTRLS, &cs);
 }
 
-static int itd_v4l2_query_ctrl(__u32 id, int errout)
+static int itd_v4l2_query_ctrl(__u32 id, int errout, int *next_id)
 {
 	struct v4l2_queryctrl q;
 	int r = 0;
 
 	CLEAR(q);
 	q.id = id;
+	if (next_id)
+		q.id |= V4L2_CTRL_FLAG_NEXT_CTRL | V4L2_CTRL_FLAG_NEXT_COMPOUND;
 	if (errout)
 		itd_xioctl(VIDIOC_QUERYCTRL, &q);
 	else
 		r = itd_xioctl_try(VIDIOC_QUERYCTRL, &q);
 	if (r)
 		return r;
+	if (next_id)
+		*next_id = q.id;
 
-	print(1, "VIDIOC_QUERYCTRL[%s] =\n", get_control_name(id));
+	print(1, "VIDIOC_QUERYCTRL[%s] =\n", get_control_name(q.id));
 	print(2, "> type:    %s\n", symbol_str(q.type, v4l2_queryctrl_type));
 	print(2, "> name:    `%.32s'\n", q.name);
 	print(2, "> limits:  %i..%i / %i\n", q.minimum, q.maximum, q.step);
@@ -1978,7 +1980,7 @@ static int itd_v4l2_query_ctrl(__u32 id, int errout)
 	return 0;
 }
 
-static int itd_v4l2_query_ext_ctrl(__u32 id, int errout)
+static int itd_v4l2_query_ext_ctrl(__u32 id, int errout, int *next_id)
 {
 	char dims[V4L2_CTRL_MAX_DIMS * 11 + 11] = "<none>";
 	struct v4l2_query_ext_ctrl q;
@@ -1986,19 +1988,23 @@ static int itd_v4l2_query_ext_ctrl(__u32 id, int errout)
 
 	CLEAR(q);
 	q.id = id;
+	if (next_id)
+		q.id |= V4L2_CTRL_FLAG_NEXT_CTRL | V4L2_CTRL_FLAG_NEXT_COMPOUND;
 	if (errout)
 		itd_xioctl(VIDIOC_QUERY_EXT_CTRL, &q);
 	else
 		r = itd_xioctl_try(VIDIOC_QUERY_EXT_CTRL, &q);
 	if (r)
 		return r;
+	if (next_id)
+		*next_id = q.id;
 
 	for (n = 0, i = 0; i < MIN(q.nr_of_dims, V4L2_CTRL_MAX_DIMS); i++)
 		n += sprintf(&dims[n], "%u,", q.dims[i]);
 	if (n > 1)
 		dims[n - 1] = 0;
 
-	print(1, "VIDIOC_QUERY_EXT_CTRL[%s] =\n", get_control_name(id));
+	print(1, "VIDIOC_QUERY_EXT_CTRL[%s] =\n", get_control_name(q.id));
 	print(2, "> type:       %s\n", symbol_str(q.type, v4l2_queryctrl_type));
 	print(2, "> name:       `%.32s'\n", q.name);
 	print(2, "> limits:     %li..%li / %lu\n", (long)q.minimum, (long)q.maximum, (long)q.step);
@@ -2081,26 +2087,28 @@ static void itd_request_controls(const char *start)
 				next = TRUE;
 			end = value + 1;
 			if (ext)
-				itd_v4l2_query_ext_ctrl(id, 1);
+				itd_v4l2_query_ext_ctrl(id, 1, NULL);
 			else
-				itd_v4l2_query_ctrl(id, 1);
+				itd_v4l2_query_ctrl(id, 1, NULL);
 		} else error("bad request for control");
 		start = end;
 	} while (next);
 }
 
-static void itd_enumerate_controls(const char *unused)
+static void itd_enumerate_controls(const char *s)
 {
-	int id;
+	bool ext = s ? (strcmp(s, "+") == 0) : 0;
+	int id = 0, r;
 
-	for (id = V4L2_CID_BASE; id < V4L2_CID_LASTP1; id++) {
-		itd_v4l2_query_ctrl(id, 0);
-	}
-	for (id = V4L2_CID_PRIVATE_BASE; ; id++) {
-		int r = itd_v4l2_query_ctrl(id, 0);
-		if (r == -EINVAL)
-			break;
-	}
+	do {
+		if (ext)
+			r = itd_v4l2_query_ext_ctrl(id, 0, &id);
+		else
+			r = itd_v4l2_query_ctrl(id, 0, &id);
+	} while (r == 0);
+
+	if (r != -EINVAL)
+		error("%s failed", ext ? "VIDIOC_QUERY_EXT_CTRL" : "VIDIOC_QUERY_CTRL");
 }
 
 static void itd_subdev_frame_interval(const char *s)
@@ -2679,7 +2687,7 @@ static void process_commands(int argc, char *argv[])
 			{ "parameters", 1, NULL, 1014 },
 			{ "ctrl-list", 0, NULL, 1003 },
 			{ "fmt-list", 0, NULL, 1004 },
-			{ "enumctrl", 0, NULL, 1018 },
+			{ "enumctrl", 2, NULL, 1018 },
 			{ "ctrl", 1, NULL, 'c' },
 			{ "wait", 2, NULL, 'w' },
 			{ "waitkey", 2, NULL, 1009 },
@@ -2837,7 +2845,7 @@ static void process_commands(int argc, char *argv[])
 
 		case 1018:	/* --enumctrl */
 			itr_iterate(itd_open_device, NULL);
-			itr_iterate(itd_enumerate_controls, NULL);
+			itr_iterate(itd_enumerate_controls, optarg);
 			break;
 
 		case 'c':	/* --ctrl, -c, VIDIOC_QUERYCTRL / VIDIOC_S/G_CTRL / VIDIOC_S/G_EXT_CTRLS */
