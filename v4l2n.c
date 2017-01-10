@@ -1101,6 +1101,26 @@ static void write_file(const char *name, const void *data, int size)
 		error("failed to close file");
 }
 
+static void *read_file(const char *name, int *len)
+{
+	int length;
+	int r;
+	void *p;
+	FILE *f;
+
+	f = fopen(name, "rb");			if (!f) error("failed to open file `%s'", name);
+	r = fseek(f, 0, SEEK_END);		if (r < 0) error("failed to seek file");
+	length = ftell(f);			if (length <= 0) error("failed to get file size");
+	r = fseek(f, 0, SEEK_SET);		if (r < 0) error("failed to seek file");
+	p = ralloc(NULL, length);		if (!p) error("out of memory");
+
+	r = fread(p, length, 1, f);		if (r != 1) error("failed to read file");
+	fclose(f);
+
+	*len = length;
+	return p;
+}
+
 static void itr_iterate(void (*itd)(const char *), const char *arg)
 {
 	for (vars.pipe = 0; vars.pipe < MAX_PIPES; vars.pipe++) {
@@ -1930,14 +1950,17 @@ static __s32 itd_v4l2_g_ctrl(__u32 id)
 	return c.value;
 }
 
-static void itd_v4l2_s_ext_ctrl(__u32 id, const char *value)
+static void itd_v4l2_s_ext_ctrl(__u32 id, const char *opts)
 {
 	struct v4l2_ext_controls cs;
 	struct v4l2_ext_control c;
-	__s32 val;
 
-	if (sscanf(value, "%i", &val) != 1)
-		error("bad extended control value");
+	char *type = NULL;
+	char *valuescan = NULL;
+	char *valuebuf = NULL;
+	const char *valuespec;
+	long value;
+	int size = 0;
 
 	CLEAR(cs);
 	cs.ctrl_class = V4L2_CTRL_ID2CLASS(id);
@@ -1946,15 +1969,71 @@ static void itd_v4l2_s_ext_ctrl(__u32 id, const char *value)
 
 	CLEAR(c);
 	c.id = id;
-	c.value = val;
 
-	print(1, "VIDIOC_S_EXT_CTRLS[%s] = %i\n", get_control_name(id), c.value);
+	sscanf(opts, "%m[^:]:%ms", &type, &valuescan);
+
+	if (type && !valuescan) error("bad compound type extended control specification");
+	valuespec = valuescan ? valuescan : opts;
+
+	if (valuespec[0]==':') {
+		const char *filename = &valuespec[1];
+		valuebuf = read_file(filename, &size);
+		if (size <= 0 || !valuebuf)
+			error("can not read control value from file `%s'", filename);
+		print(1, "Reading control %s (%i bytes) from `%s'\n", get_control_name(id), size, filename);
+	}
+
+	if (!type || strcmp(type, "value") == 0) {
+		if (sscanf(valuespec, "%li", &value) != 1)
+			error("bad extended control value");
+		c.value = value;
+		print(1, "VIDIOC_S_EXT_CTRLS[%s] = %i\n", get_control_name(id), (int)c.value);
+	} else if (strcmp(type, "value64") == 0) {
+		if (sscanf(valuespec, "%li", &value) != 1)
+			error("bad extended control value64");
+		c.value64 = value;
+		print(1, "VIDIOC_S_EXT_CTRLS[%s] = %li\n", get_control_name(id), (long)c.value64);
+	} else if (strcmp(type, "string") == 0) {
+		if (!valuespec) error("get extended control string: buffer size missing");
+		c.size = strlen(valuespec);
+		c.string = (char *)valuespec;
+		print(1, "VIDIOC_S_EXT_CTRLS[%s] = `%s'\n", get_control_name(id), c.string);
+	} else if (strcmp(type, "p_u8") == 0 ||
+		   strcmp(type, "p_u16") == 0 ||
+		   strcmp(type, "p_u32") == 0 ||
+		   strcmp(type, "ptr") == 0) {
+		int max_size = 0;
+		if (!valuebuf) {
+			while (isxdigit(valuespec[size*2]) && isxdigit(valuespec[size*2+1])) {
+				while (max_size <= size) {
+					max_size += 16;
+					valuebuf = ralloc(valuebuf, max_size);
+				}
+				sscanf(&valuespec[size*2], "%02lx", &value);
+				valuebuf[size] = value;
+				size++;
+			}
+		}
+		c.ptr = valuebuf;
+		c.size = size;
+		print(1, "VIDIOC_S_EXT_CTRLS[%s] = %p\n", get_control_name(id), c.ptr);
+	} else {
+		error("bad extended control type `%s'", type);
+	}
+
 	print(2, "< ctrl_class: 0x%08X\n", cs.ctrl_class);
 	print(2, "< count:      %i\n", cs.count);
 	print(2, "< controls:   %p\n", cs.controls);
 	print(2, "<< id:        0x%08X\n", c.id);
+	print(2, "<< size:      %i\n", c.size);
 	print(2, "<< value:     %i\n", c.value);
+	print(2, "<< value64:   %li\n", (long)c.value64);
+	print(2, "<< ptr:       %p\n", c.ptr);
 	itd_xioctl(VIDIOC_S_EXT_CTRLS, &cs);
+
+	free(type);
+	free(valuescan);
+	free(valuebuf);
 }
 
 static int itd_v4l2_query_ctrl(__u32 id, int errout, int *next_id)
@@ -2109,7 +2188,7 @@ static void itd_request_controls(const char *start)
 		id = get_control_id(start);
 		if (op == '=') {
 			/* Set value */
-			for (end = value; isident(*end); end++);
+			for (end = value; *end && *end != ','; end++);
 			if (*end == ',')
 				next = TRUE;
 			if (*end) *end++ = 0;
