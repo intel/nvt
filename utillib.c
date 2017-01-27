@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
+#include "utillib.h"
 
 static void error(char *s)
 {

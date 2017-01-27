@@ -31,7 +31,7 @@
 #define CLAMP(a,lo,hi)	((a) < (lo) ? (lo) : (a) > (hi) ? (hi) : (a))
 #define CLAMPB(a)	CLAMP(a, 0, 255)
 
-char *name = "raw2pnm";
+static char *name = "raw2pnm";
 
 static int verbosity = 2;
 

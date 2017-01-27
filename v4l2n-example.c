@@ -18,7 +18,7 @@
 #include <stdlib.h>
 #include "v4l2n.h"
 
-void error(void)
+static void error(void)
 {
 	printf("libv4l2n execution failed");
 	exit(1);

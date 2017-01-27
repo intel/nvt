@@ -1996,7 +1996,7 @@ static void itd_v4l2_s_ext_ctrl(__u32 id, const char *opts)
 	} else if (strcmp(type, "string") == 0) {
 		if (!valuespec) error("get extended control string: buffer size missing");
 		c.size = strlen(valuespec);
-		c.string = (char *)valuespec;
+		c.string = (char *)valuespec;	/* OK to cast from const, since not modified */
 		print(1, "VIDIOC_S_EXT_CTRLS[%s] = `%s'\n", get_control_name(id), c.string);
 	} else if (strcmp(type, "p_u8") == 0 ||
 		   strcmp(type, "p_u16") == 0 ||
@@ -2175,7 +2175,7 @@ static void itd_request_controls(const char *start)
 	int val;
 
 	do {
-		for (end = start; isident(*end); end++);
+		for (end = (char*)start; isident(*end); end++);
 		value = end;
 		ext = FALSE;
 		if (*value == '+') {
@@ -2829,7 +2829,7 @@ static void process_commands(int argc, char *argv[])
 			{ "file", 1, NULL, 1015 },
 			{ "pipe", 1, NULL, 1016 },
 			{ "load", 1, NULL, 1021 },
-			{ 0, 0, 0, 0 }
+			{ NULL, 0, NULL, 0 }
 		};
 
 		int c = getopt_long(argc, argv, "hv::ql::d:i:o:p:t:f:r:sea::x:c:w::", long_options, NULL);

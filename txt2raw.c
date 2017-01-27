@@ -94,6 +94,7 @@ static unsigned char *txt2buf(FILE *f, int size[2])
 	return buf;
 }
 
+#if 0
 static unsigned char *uncompress(unsigned char *compr, int compr_size[2], int uncomp_size[2])
 {
 	unsigned char *buf;		/* Resulting buffer */
@@ -133,6 +134,7 @@ static unsigned char *uncompress(unsigned char *compr, int compr_size[2], int un
 
 	return buf;
 }
+#endif
 
 static void write_pixel(unsigned char *p, unsigned int v)
 {
