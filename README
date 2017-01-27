@@ -1,7 +1,7 @@
-	V4L2N Image and Video test tool
-	-------------------------------
+	Next Video Tool for Linux* OS
+	-----------------------------
 
-Copyright (C) 2011--2015 Intel Corporation.
+Copyright (C) 2011--2017 Intel Corporation.
 Contact: Tuukka Toivonen <tuukka.toivonen@intel.com>
 
 No license (express or implied, by estoppel or otherwise) to any intellectual
@@ -26,29 +26,29 @@ in the U.S. and/or other countries.
 
 *Other names and brands may be claimed as the property of others
 
-© 2015 Intel Corporation.
+© 2017 Intel Corporation.
 
 = Introduction =
 
-v4l2n is a simple very low level command line test tool for Linux V4L2 video
-and image capture interface developed from scratch. It allows very precise
-control of the V4L2 interface and displays detailed information on exchanged
-data structures.
+Next Video Tool for Linux* OS is a simple very low level command line test
+tool for Linux V4L2 video and image capture interface developed from scratch.
+It allows very precise control of the V4L2 interface and displays detailed
+information on exchanged data structures.
 
 It has been developed for Android/x86 but should work on generic Linux
 systems once compiled. It is standalone and independent of Android tree
 during compilation and usage.
 
-v4l2n by default supports some Intel-specific extensions to the V4L2
+By default, the tool supports some Intel-specific extensions to the V4L2
 interface. These can be compile-time disabled. All necessary header
-files are included with the v4l2n package so there are no dependencies
-to external V4L2 or AtomISP header files.
+files are included with the package so there are no dependencies to
+external V4L2 or AtomISP header files.
 
-v4l2n can capture images and store them to raw files. The raw files can
+The tool can capture images and store them to raw files. The raw files can
 be converted to standard pnm files using the companion raw2pnm tool.
-v4l2n also allows setting and querying of V4L2 controls.
+The tool also allows setting and querying of V4L2 controls.
 
-The philosophy of v4l2n:
+The philosophy of Next Video Tool:
 - Have everywhere sane default values to simplify usage
 - Allow user to control every detail and order of the issued system calls
 - Do nothing unless told to do
@@ -95,13 +95,6 @@ the options are listed with "--help" but unfortunately the description of the
 fields is incomplete. Please use source code and the links above to check
 possible structure field names.
 
-The philosophy of v4l2n is that all options have some sane default values
-and only those need to be given for which the default is not suitable.
-If the video device is not opened explicitly with --device, it is assumed
-to be /dev/video0 and opened automatically by most options. Similarly,
-with other options, field values need not to be specified unless the defaults
-are not suitable.
-
 V4L2 controls can be get, set, and queried with the --ctrl command. The
 list of supported controls is shown with option --ctrl-list. To set a simple
 control values (VIDIOC_S_CTRL) use option "--ctrl=HFLIP=1", for example.
@@ -113,8 +106,8 @@ VIDIOC_G_EXT_CTRLS. Use a hash character "#" to query control
 
 == v4l2n.sh ==
 
-Since v4l2n is a very low-level tool, the user must specify exactly what
-he or she wants to do. This may lead to quite long command lines.
+Since Next Video Tool is a very low-level tool, the user must specify
+exactly what he or she wants to do. This may lead to quite long command lines.
 For Linux host users, there is alternatively a script v4l2n.sh designed
 to interface with x86-based Android devices with adb. Automatic image
 capture can be launched with host Linux command lines:

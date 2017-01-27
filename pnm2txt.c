@@ -1,7 +1,7 @@
 /*
- * v4l2n - Video4Linux2 API tool for developers.
+ * Next Video Tool for Linux* OS - Video4Linux2 API tool for developers.
  *
- * Copyright (c) 2015 Intel Corporation. All Rights Reserved.
+ * Copyright (c) 2017 Intel Corporation. All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License version
