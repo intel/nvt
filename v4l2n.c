@@ -135,6 +135,7 @@ struct token_list {
 #define TOKEN_F_ARG	BIT(1)		/* Token must have argument or it is an error */
 #define TOKEN_F_ARG2	BIT(2)		/* Token may have 2 integer arguments */
 #define TOKEN_F_ARG4	BIT(3)		/* Token may have 4 integer arguments */
+#define TOKEN_F_FLAGS	BIT(8)		/* Token contains flags (ie. is a bitmask) */
 
 #define V4L2_CID	"V4L2_CID_"
 #define CONTROL(id)	{ V4L2_CID_##id, (#id) }
@@ -881,12 +882,23 @@ static void usage(void)
 		"--load <name>	Load buffer data from file for driver\n"
 		"--crop <args>	Set/get cropping parameters\n"
 		"--cropcap <type=x> Get cropping capabilities\n"
+		"--selection <args> Set/get selection parameters\n"
 		"\n"
 		"List of V4L2 controls syntax: <[V4L2_CID_]control_name_or_id>[+][=value|?|#][,...]\n"
 		"where control_name_or_id is either symbolic name or numerical id.\n"
 		"When + is given, use extended controls, otherwise use old-style control call.\n"
 		"\"=\" sets the value, \"?\" gets the current value, and \"#\" shows control info.\n",
 			name);
+}
+
+static int isident(int c)
+{
+	return isalnum(c) || c == '_';
+}
+
+static int isseparator(int c)
+{
+	return c ==',' || c == '/' || c == ';';
 }
 
 static void symbol_dump(const char *prefix, const struct symbol_list *list)
@@ -952,7 +964,7 @@ static int values_get(int *val, int val_size, const char **ptr)
 			break;
 		s = a;
 		i++;
-		if (*s!=',' && *s!='/' && *s!=';')
+		if (!isseparator(*s))
 			break;
 		s++;
 	}
@@ -1000,7 +1012,12 @@ static int token_get(const struct token_list *list, const char **token, int val[
 		if (!(list[i].flags & (TOKEN_F_ARG | TOKEN_F_OPTARG)))
 			error("token has argument but should not have");
 		end++;
-		if (list[i].symbols) {
+		if (list[i].flags & TOKEN_F_FLAGS) {
+			while (isident(*end)) {
+				val[0] |= symbol_get(list[i].symbols, &end);
+				if (*end == '|' || *end == '/' || *end == ';') end++;
+			}
+		} else if (list[i].symbols) {
 			val[0] = symbol_get(list[i].symbols, &end);
 		} else if (list[i].flags & TOKEN_F_ARG4) {
 			value_get(val, 4, &end);
@@ -1513,6 +1530,73 @@ static void itd_vidioc_cropcap(const char *s)
 	print(2, ": bounds:        %s\n", get_v4l2_rect(&p.bounds));
 	print(2, ": defrect:       %s\n", get_v4l2_rect(&p.defrect));
 	print(2, ": pixelaspect:   %s\n", get_v4l2_fract(&p.pixelaspect));
+}
+
+static void itd_vidioc_sg_selection(const char *s)
+{
+	static const struct symbol_list target[] = {
+		{ V4L2_SEL_TGT_CROP, "V4L2_SEL_TGT_CROP" },
+		{ V4L2_SEL_TGT_CROP_DEFAULT, "V4L2_SEL_TGT_CROP_DEFAULT" },
+		{ V4L2_SEL_TGT_CROP_BOUNDS, "V4L2_SEL_TGT_CROP_BOUNDS" },
+		{ V4L2_SEL_TGT_NATIVE_SIZE, "V4L2_SEL_TGT_NATIVE_SIZE" },
+		{ V4L2_SEL_TGT_COMPOSE, "V4L2_SEL_TGT_COMPOSE" },
+		{ V4L2_SEL_TGT_COMPOSE_DEFAULT, "V4L2_SEL_TGT_COMPOSE_DEFAULT" },
+		{ V4L2_SEL_TGT_COMPOSE_BOUNDS, "V4L2_SEL_TGT_COMPOSE_BOUNDS" },
+		{ V4L2_SEL_TGT_COMPOSE_PADDED, "V4L2_SEL_TGT_COMPOSE_PADDED" },
+		SYMBOL_END
+	};
+	static const struct symbol_list flags[] = {
+		{ V4L2_SEL_FLAG_GE, "V4L2_SEL_FLAG_GE" },
+		{ V4L2_SEL_FLAG_LE, "V4L2_SEL_FLAG_LE" },
+		{ V4L2_SEL_FLAG_KEEP_CONFIG, "V4L2_SEL_FLAG_KEEP_CONFIG" },
+		SYMBOL_END
+	};
+	static const struct token_list list[] = {
+		{ 't', TOKEN_F_ARG, "type", v4l2_buf_types },
+		{ 'a', TOKEN_F_ARG, "target", target },
+		{ 'f', TOKEN_F_ARG|TOKEN_F_FLAGS, "flags", flags },
+		{ 'r', TOKEN_F_ARG|TOKEN_F_ARG4, "r", NULL },
+		TOKEN_END
+	};
+	struct v4l2_selection p;
+
+	CLEAR(p);
+	p.type = vars.pipes[vars.pipe].reqbufs.type;
+	if (p.type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE)
+		p.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	if (p.type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE)
+		p.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
+
+	while (*s && *s!='?') {
+		int val[4];
+		switch (token_get(list, &s, val)) {
+		case 't': p.type = val[0]; break;
+		case 'a': p.target = val[0]; break;
+		case 'f': p.flags = val[0]; break;
+		case 'r':
+			p.r.left   = val[0];
+			p.r.top    = val[1];
+			p.r.width  = val[2];
+			p.r.height = val[3];
+			break;
+		}
+	}
+
+	if (*s == '?') {
+		print(1, "VIDIOC_G_SELECTION\n");
+		itd_xioctl(VIDIOC_G_SELECTION, &p);
+	} else {
+		print(1, "VIDIOC_S_SELECTION\n");
+		print(3, "< type:          %s\n", symbol_str(p.type, v4l2_buf_types));
+		print(3, "< target:        %s\n", symbol_str(p.target, target));
+		print(3, "< flags:         %s\n", symbol_flag_str(p.flags, flags));
+		print(3, "< r:             %s\n", get_v4l2_rect(&p.r));
+		itd_xioctl(VIDIOC_S_SELECTION, &p);
+	}
+	print(2, "> type:          %s\n", symbol_str(p.type, v4l2_buf_types));
+	print(2, "> target:        %s\n", symbol_str(p.target, target));
+	print(2, "> flags:         %s\n", symbol_flag_str(p.flags, flags));
+	print(2, "> r:             %s\n", get_v4l2_rect(&p.r));
 }
 
 static void itd_vidioc_reqbufs(const char *s)
@@ -2244,11 +2328,6 @@ static void itd_v4l2_g_ext_ctrl(__u32 id, char *opts)
 	free(ptr);
 }
 
-static int isident(int c)
-{
-	return isalnum(c) || c == '_';
-}
-
 static void itd_request_controls(const char *start)
 {
 	char *end, *value, *type;
@@ -2914,6 +2993,7 @@ static void process_commands(int argc, char *argv[])
 			{ "load", 1, NULL, 1021 },
 			{ "crop", 1, NULL, 1022 },
 			{ "cropcap", 2, NULL, 1023 },
+			{ "selection", 1, NULL, 1024 },
 			{ NULL, 0, NULL, 0 }
 		};
 
@@ -3117,6 +3197,11 @@ static void process_commands(int argc, char *argv[])
 		case 1023:	/* --cropcap */
 			itr_iterate(itd_open_device, NULL);
 			itr_iterate(itd_vidioc_cropcap, optarg);
+			break;
+
+		case 1024:	/* --selection */
+			itr_iterate(itd_open_device, NULL);
+			itr_iterate(itd_vidioc_sg_selection, optarg);
 			break;
 
 		default:
