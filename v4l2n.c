@@ -879,6 +879,8 @@ static void usage(void)
 		"--file	<name>	Read commands (options) from given file\n"
 		"--pipe <n,m,..> Select current pipes to operate on\n"
 		"--load <name>	Load buffer data from file for driver\n"
+		"--crop <args>	Set/get cropping parameters\n"
+		"--cropcap <type=x> Get cropping capabilities\n"
 		"\n"
 		"List of V4L2 controls syntax: <[V4L2_CID_]control_name_or_id>[+][=value|?|#][,...]\n"
 		"where control_name_or_id is either symbolic name or numerical id.\n"
@@ -1129,6 +1131,22 @@ static void itr_iterate(void (*itd)(const char *), const char *arg)
 	}
 }
 
+static char *get_v4l2_rect(struct v4l2_rect *r)
+{
+	static char buf[50];
+
+	sprintf(buf, "(%i,%i) %ux%u", r->left, r->top, r->width, r->height);
+	return buf;
+}
+
+static char *get_v4l2_fract(struct v4l2_fract *f)
+{
+	static char buf[30];
+
+	sprintf(buf, "%u/%u", f->numerator, f->denominator);
+	return buf;
+}
+
 static void itd_vidioc_enuminput(const char *unused)
 {
 	static const struct symbol_list type[] = {
@@ -1249,7 +1267,7 @@ static void itd_vidioc_enum_fmt(const char *arg)
 				print(1, "type %s ", symbol_str(frmivalenum.type, v4l2_frmival_types));
 				switch (frmivalenum.type) {
 				case V4L2_FRMIVAL_TYPE_DISCRETE:
-					print(1, "%i/%i", frmivalenum.discrete.numerator, frmivalenum.discrete.denominator);
+					print(1, "%s", get_v4l2_fract(&frmivalenum.discrete));
 					break;
 				case V4L2_FRMIVAL_TYPE_CONTINUOUS:
 				case V4L2_FRMIVAL_TYPE_STEPWISE:
@@ -1343,13 +1361,13 @@ static void itd_vidioc_parm(const char *s)
 	if (p.type == V4L2_BUF_TYPE_VIDEO_CAPTURE) {
 		print(2, ": capability:    %s\n", symbol_str(p.parm.capture.capability, capability));
 		print(2, ": capturemode:   %s\n", symbol_str(p.parm.capture.capturemode, capturemode));
-		print(2, ": timeperframe:  %i/%i\n", p.parm.capture.timeperframe.numerator, p.parm.capture.timeperframe.denominator);
+		print(2, ": timeperframe:  %s\n", get_v4l2_fract(&p.parm.capture.timeperframe));
 		print(2, ": extendedmode:  %i\n", p.parm.capture.extendedmode);
 		print(2, ": readbuffers:   %i\n", p.parm.capture.readbuffers);
 	} else if (p.type == V4L2_BUF_TYPE_VIDEO_OUTPUT) {
 		print(2, ": capability:    %s\n", symbol_str(p.parm.output.capability, capability));
 		print(2, ": outputmode:    %s\n",  symbol_str(p.parm.capture.capturemode, capturemode));
-		print(2, ": timeperframe:  %i/%i\n",  p.parm.capture.timeperframe.numerator, p.parm.capture.timeperframe.denominator);
+		print(2, ": timeperframe:  %s\n",  get_v4l2_fract(&p.parm.capture.timeperframe));
 	}
 
 	if (*s != '?') {
@@ -1430,6 +1448,71 @@ static void itd_vidioc_try_fmt(const char *s)
 static void itd_vidioc_sg_fmt(const char *s)
 {
 	itd_vidioc_fmt(FALSE, s);
+}
+
+static void itd_vidioc_sg_crop(const char *s)
+{
+	static const struct token_list list[] = {
+		{ 't', TOKEN_F_ARG, "type", v4l2_buf_types },
+		{ 'c', TOKEN_F_ARG|TOKEN_F_ARG4, "c", NULL },
+		TOKEN_END
+	};
+	struct v4l2_crop p;
+
+	CLEAR(p);
+	p.type = vars.pipes[vars.pipe].reqbufs.type;
+
+	while (*s && *s!='?') {
+		int val[4];
+		switch (token_get(list, &s, val)) {
+		case 't': p.type = val[0]; break;
+		case 'c':
+			p.c.left   = val[0];
+			p.c.top    = val[1];
+			p.c.width  = val[2];
+			p.c.height = val[3];
+			break;
+		}
+	}
+
+	if (*s == '?') {
+		print(1, "VIDIOC_G_CROP\n");
+		itd_xioctl(VIDIOC_G_CROP, &p);
+	} else {
+		print(1, "VIDIOC_S_CROP\n");
+		print(3, "< type:          %s\n", symbol_str(p.type, v4l2_buf_types));
+		print(3, "< c:             %s\n", get_v4l2_rect(&p.c));
+		itd_xioctl(VIDIOC_S_CROP, &p);
+	}
+	print(2, "> type:          %s\n", symbol_str(p.type, v4l2_buf_types));
+	print(2, "> c:             %s\n", get_v4l2_rect(&p.c));
+}
+
+static void itd_vidioc_cropcap(const char *s)
+{
+	static const struct token_list list[] = {
+		{ 't', TOKEN_F_ARG, "type", v4l2_buf_types },
+		TOKEN_END
+	};
+	struct v4l2_cropcap p;
+
+	CLEAR(p);
+	p.type = vars.pipes[vars.pipe].reqbufs.type;
+
+	while (s && *s) {
+		int val[4];
+		switch (token_get(list, &s, val)) {
+		case 't': p.type = val[0]; break;
+		}
+	}
+
+	print(1, "VIDIOC_CROPCAP\n");
+	itd_xioctl(VIDIOC_CROPCAP, &p);
+
+	print(2, ": type:          %s\n", symbol_str(p.type, v4l2_buf_types));
+	print(2, ": bounds:        %s\n", get_v4l2_rect(&p.bounds));
+	print(2, ": defrect:       %s\n", get_v4l2_rect(&p.defrect));
+	print(2, ": pixelaspect:   %s\n", get_v4l2_fract(&p.pixelaspect));
 }
 
 static void itd_vidioc_reqbufs(const char *s)
@@ -2274,7 +2357,7 @@ static void itd_subdev_frame_interval(const char *s)
 	}
 
 	print(2, ": pad:       %i\n", p.pad);
-	print(2, ": interval:  %i/%i\n", p.interval.numerator, p.interval.denominator);
+	print(2, ": interval:  %s\n", get_v4l2_fract(&p.interval));
 
 	if (*s != '?') {
 		itd_xioctl(VIDIOC_SUBDEV_S_FRAME_INTERVAL, &p);
@@ -2829,6 +2912,8 @@ static void process_commands(int argc, char *argv[])
 			{ "file", 1, NULL, 1015 },
 			{ "pipe", 1, NULL, 1016 },
 			{ "load", 1, NULL, 1021 },
+			{ "crop", 1, NULL, 1022 },
+			{ "cropcap", 2, NULL, 1023 },
 			{ NULL, 0, NULL, 0 }
 		};
 
@@ -3022,6 +3107,16 @@ static void process_commands(int argc, char *argv[])
 
 		case 1021:	/* --load */
 			itr_iterate(itd_load_bufdata, optarg);
+			break;
+
+		case 1022:	/* --crop */
+			itr_iterate(itd_open_device, NULL);
+			itr_iterate(itd_vidioc_sg_crop, optarg);
+			break;
+
+		case 1023:	/* --cropcap */
+			itr_iterate(itd_open_device, NULL);
+			itr_iterate(itd_vidioc_cropcap, optarg);
 			break;
 
 		default:
