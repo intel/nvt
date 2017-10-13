@@ -68,6 +68,10 @@ static unsigned long int _PAGE_MASK;
 #define MAX_BUFFER_SIZE		(64*1024*1024)
 #define MAX_PIPES		6
 
+#define V4L2_TYPE_IS_META(type)			\
+	((type) == V4L2_BUF_TYPE_META_CAPTURE	\
+	 || (type) == V4L2_BUF_TYPE_META_OUTPUT)
+
 #define V4L2_TYPE_IS_VIDEO(type)				\
 	((type) == V4L2_BUF_TYPE_VIDEO_CAPTURE			\
 	 || (type) == V4L2_BUF_TYPE_VIDEO_OUTPUT		\
@@ -508,6 +512,8 @@ static const struct symbol_list v4l2_buf_types[] = {
 	BUFTYPE(SLICED_VBI_OUTPUT),
 	BUFTYPE(VIDEO_OUTPUT_OVERLAY),
 	BUFTYPE(PRIVATE),
+	BUFTYPE(META_CAPTURE),
+	BUFTYPE(META_OUTPUT),
 	SYMBOL_END
 };
 
@@ -1226,7 +1232,9 @@ static __u32 get_buffer_offset(struct v4l2_buffer *buffer)
 
 static __u32 get_format_width(struct v4l2_format *format)
 {
-	if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
+	if (V4L2_TYPE_IS_META(format->type))
+		return format->fmt.meta.buffersize;
+	else if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
 		return format->fmt.pix_mp.width;
 	else
 		return format->fmt.pix.width;
@@ -1234,7 +1242,9 @@ static __u32 get_format_width(struct v4l2_format *format)
 
 static void set_format_width(struct v4l2_format *format, __u32 width)
 {
-	if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
+	if (V4L2_TYPE_IS_META(format->type))
+		return;
+	else if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
 		format->fmt.pix_mp.width = width;
 	else
 		format->fmt.pix.width = width;
@@ -1242,7 +1252,9 @@ static void set_format_width(struct v4l2_format *format, __u32 width)
 
 static __u32 get_format_height(struct v4l2_format *format)
 {
-	if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
+	if (V4L2_TYPE_IS_META(format->type))
+		return 1;
+	else if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
 		return format->fmt.pix_mp.height;
 	else
 		return format->fmt.pix.height;
@@ -1250,7 +1262,9 @@ static __u32 get_format_height(struct v4l2_format *format)
 
 static void set_format_height(struct v4l2_format *format, __u32 height)
 {
-	if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
+	if (V4L2_TYPE_IS_META(format->type))
+		return;
+	else if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
 		format->fmt.pix_mp.height = height;
 	else
 		format->fmt.pix.height = height;
@@ -1258,7 +1272,9 @@ static void set_format_height(struct v4l2_format *format, __u32 height)
 
 static __u32 get_format_code(struct v4l2_format *format)
 {
-	if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
+	if (V4L2_TYPE_IS_META(format->type))
+		return format->fmt.meta.dataformat;
+	else if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
 		return format->fmt.pix_mp.pixelformat;
 	else
 		return format->fmt.pix.pixelformat;
@@ -1266,7 +1282,9 @@ static __u32 get_format_code(struct v4l2_format *format)
 
 static void set_format_code(struct v4l2_format *format, __u32 code)
 {
-	if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
+	if (V4L2_TYPE_IS_META(format->type))
+		format->fmt.meta.dataformat = code;
+	else if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
 		format->fmt.pix_mp.pixelformat = code;
 	else
 		format->fmt.pix.pixelformat = code;
@@ -1274,7 +1292,9 @@ static void set_format_code(struct v4l2_format *format, __u32 code)
 
 static __u32 get_format_field(struct v4l2_format *format)
 {
-	if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
+	if (V4L2_TYPE_IS_META(format->type))
+		return V4L2_FIELD_NONE;
+	else if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
 		return format->fmt.pix_mp.field;
 	else
 		return format->fmt.pix.field;
@@ -1282,7 +1302,9 @@ static __u32 get_format_field(struct v4l2_format *format)
 
 static void set_format_field(struct v4l2_format *format, __u32 field)
 {
-	if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
+	if (V4L2_TYPE_IS_META(format->type))
+		return;
+	else if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
 		format->fmt.pix_mp.field = field;
 	else
 		format->fmt.pix.field = field;
@@ -1290,7 +1312,9 @@ static void set_format_field(struct v4l2_format *format, __u32 field)
 
 static __u32 get_format_bytesperline(struct v4l2_format *format)
 {
-	if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
+	if (V4L2_TYPE_IS_META(format->type))
+		return format->fmt.meta.buffersize;
+	else if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
 		return format->fmt.pix_mp.plane_fmt[0].bytesperline;
 	else
 		return format->fmt.pix.bytesperline;
@@ -1298,7 +1322,9 @@ static __u32 get_format_bytesperline(struct v4l2_format *format)
 
 static void set_format_bytesperline(struct v4l2_format *format, __u32 bytesperline)
 {
-	if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
+	if (V4L2_TYPE_IS_META(format->type))
+		return;
+	else if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
 		format->fmt.pix_mp.plane_fmt[0].bytesperline = bytesperline;
 	else
 		format->fmt.pix.bytesperline = bytesperline;
@@ -1306,7 +1332,9 @@ static void set_format_bytesperline(struct v4l2_format *format, __u32 bytesperli
 
 static __u32 get_format_size(struct v4l2_format *format)
 {
-	if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
+	if (V4L2_TYPE_IS_META(format->type))
+		return format->fmt.meta.buffersize;
+	else if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
 		return format->fmt.pix_mp.plane_fmt[0].sizeimage;
 	else
 		return format->fmt.pix.sizeimage;
@@ -1314,7 +1342,9 @@ static __u32 get_format_size(struct v4l2_format *format)
 
 static void set_format_size(struct v4l2_format *format, __u32 size)
 {
-	if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
+	if (V4L2_TYPE_IS_META(format->type))
+		format->fmt.meta.buffersize = size;
+	else if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
 		format->fmt.pix_mp.plane_fmt[0].sizeimage = size;
 	else
 		format->fmt.pix.sizeimage = size;
@@ -1322,7 +1352,9 @@ static void set_format_size(struct v4l2_format *format, __u32 size)
 
 static __u32 get_format_colorspace(struct v4l2_format *format)
 {
-	if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
+	if (V4L2_TYPE_IS_META(format->type))
+		return 0;
+	else if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
 		return format->fmt.pix_mp.colorspace;
 	else
 		return format->fmt.pix.colorspace;
@@ -1330,7 +1362,9 @@ static __u32 get_format_colorspace(struct v4l2_format *format)
 
 static void set_format_colorspace(struct v4l2_format *format, __u32 colorspace)
 {
-	if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
+	if (V4L2_TYPE_IS_META(format->type))
+		return;
+	else if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
 		format->fmt.pix_mp.colorspace = colorspace;
 	else
 		format->fmt.pix.colorspace = colorspace;
@@ -1338,7 +1372,9 @@ static void set_format_colorspace(struct v4l2_format *format, __u32 colorspace)
 
 static void set_format_priv(struct v4l2_format *format, __u32 priv)
 {
-	if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
+	if (V4L2_TYPE_IS_META(format->type))
+		return;
+	else if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
 		return;
 	else
 		format->fmt.pix.priv = priv;
@@ -1583,6 +1619,9 @@ static void print_v4l2_format(int v, struct v4l2_format *f, char c)
 		print(v, "%c bytesperline:  %i\n", c, get_format_bytesperline(f));
 		print(v, "%c sizeimage:     %i\n", c, get_format_size(f));
 		print(v, "%c colorspace:    %i\n", c, get_format_colorspace(f));
+	} else if (V4L2_TYPE_IS_META(f->type)) {
+		print(v, "%c format:        %i\n", c, symbol_str(get_format_code(f), pixelformats));
+		print(v, "%c size:          %i\n", c, get_format_size(f));
 	}
 }
 
@@ -1868,6 +1907,8 @@ static void itd_vidioc_querybuf(const char *unused)
 	    t != V4L2_BUF_TYPE_VIDEO_OUTPUT &&
 	    t != V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE &&
 	    t != V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE &&
+	    t != V4L2_BUF_TYPE_META_CAPTURE &&
+	    t != V4L2_BUF_TYPE_META_OUTPUT &&
 	    t != V4L2_BUF_TYPE_VIDEO_OVERLAY &&
 	    t != V4L2_BUF_TYPE_VIDEO_OUTPUT_OVERLAY)
 		error("unsupported operation type");
@@ -2242,6 +2283,8 @@ static void itd_vidioc_querycap(const char *unused)
 		CAP_FLAG(ASYNCIO),
 		CAP_FLAG(STREAMING),
 		CAP_FLAG(DEVICE_CAPS),
+		CAP_FLAG(META_CAPTURE),
+		CAP_FLAG(META_OUTPUT),
 		SYMBOL_END
 	};
 
