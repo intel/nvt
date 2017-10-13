@@ -506,6 +506,7 @@ static const struct symbol_list v4l2_buf_types[] = {
 
 #define V4L2_PIX_FMT	"V4L2_PIX_FMT_"
 #define PIXFMT(id)	{ V4L2_PIX_FMT_##id, (#id) }
+#define METAFMT(id)	{ V4L2_META_FMT_##id, (#id) }
 static const struct symbol_list pixelformats[] = {
 	PIXFMT(RGB332),
 	PIXFMT(RGB444),
@@ -670,6 +671,14 @@ static const struct symbol_list pixelformats[] = {
 	PIXFMT(YYUV420_V32),
 	PIXFMT(PRIV_MAGIC),
 	PIXFMT(FLAG_PREMUL_ALPHA),
+	PIXFMT(IPU3_SBGGR10),
+	PIXFMT(IPU3_SGBRG10),
+	PIXFMT(IPU3_SGRBG10),
+	PIXFMT(IPU3_SRGGB10),
+	METAFMT(IPU3_PARAMS),
+	METAFMT(IPU3_STAT_3A),
+	METAFMT(IPU3_STAT_DVS),
+	METAFMT(IPU3_STAT_LACE),
 	SYMBOL_END
 };
 
