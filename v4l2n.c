@@ -66,7 +66,7 @@ static unsigned long int _PAGE_MASK;
 #define MAX_RING_BUFFERS	20
 #define MAX_CAPTURE_BUFFERS	160
 #define MAX_BUFFER_SIZE		(64*1024*1024)
-#define MAX_PIPES		6
+#define MAX_PIPES		12
 
 typedef unsigned char bool;
 
