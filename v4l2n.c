@@ -68,6 +68,16 @@ static unsigned long int _PAGE_MASK;
 #define MAX_BUFFER_SIZE		(64*1024*1024)
 #define MAX_PIPES		12
 
+#define V4L2_TYPE_IS_META(type)			\
+	((type) == V4L2_BUF_TYPE_META_CAPTURE	\
+	 || (type) == V4L2_BUF_TYPE_META_OUTPUT)
+
+#define V4L2_TYPE_IS_VIDEO(type)				\
+	((type) == V4L2_BUF_TYPE_VIDEO_CAPTURE			\
+	 || (type) == V4L2_BUF_TYPE_VIDEO_OUTPUT		\
+	 || (type) == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE	\
+	 || (type) == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE)
+
 typedef unsigned char bool;
 
 static char *name = "v4l2n";
@@ -78,6 +88,7 @@ static const int FILLER = 0xFE;
  * for subsequent QBUF/DQBUF. Buffers are reused for long sequences. */
 struct ring_buffer {
 	struct v4l2_buffer querybuf;
+	struct v4l2_plane planes[VIDEO_MAX_PLANES];
 	bool queued;
 	void *malloc_p;		/* Points to address returned by malloc() */
 	void *mmap_p;		/* Points to address returned by mmap() */
@@ -86,7 +97,7 @@ struct ring_buffer {
 
 /* Used for saving each captured frame if saving was requested */
 struct capture_buffer {
-	struct v4l2_pix_format pix_format;
+	struct v4l2_format format;
 	void *image;
 	int length;		/* Length of data in the buffer in bytes */
 };
@@ -491,9 +502,9 @@ static const struct symbol_list controls[] = {
 #define BUFTYPE(id)	{ V4L2_BUF_TYPE_##id, (#id) }
 static const struct symbol_list v4l2_buf_types[] = {
 	BUFTYPE(VIDEO_CAPTURE),
-	// BUFTYPE(VIDEO_CAPTURE_MPLANE),
+	BUFTYPE(VIDEO_CAPTURE_MPLANE),
 	BUFTYPE(VIDEO_OUTPUT),
-	// BUFTYPE(VIDEO_OUTPUT_MPLANE),
+	BUFTYPE(VIDEO_OUTPUT_MPLANE),
 	BUFTYPE(VIDEO_OVERLAY),
 	BUFTYPE(VBI_CAPTURE),
 	BUFTYPE(VBI_OUTPUT),
@@ -501,11 +512,14 @@ static const struct symbol_list v4l2_buf_types[] = {
 	BUFTYPE(SLICED_VBI_OUTPUT),
 	BUFTYPE(VIDEO_OUTPUT_OVERLAY),
 	BUFTYPE(PRIVATE),
+	BUFTYPE(META_CAPTURE),
+	BUFTYPE(META_OUTPUT),
 	SYMBOL_END
 };
 
 #define V4L2_PIX_FMT	"V4L2_PIX_FMT_"
 #define PIXFMT(id)	{ V4L2_PIX_FMT_##id, (#id) }
+#define METAFMT(id)	{ V4L2_META_FMT_##id, (#id) }
 static const struct symbol_list pixelformats[] = {
 	PIXFMT(RGB332),
 	PIXFMT(RGB444),
@@ -670,6 +684,14 @@ static const struct symbol_list pixelformats[] = {
 	PIXFMT(YYUV420_V32),
 	PIXFMT(PRIV_MAGIC),
 	PIXFMT(FLAG_PREMUL_ALPHA),
+	PIXFMT(IPU3_SBGGR10),
+	PIXFMT(IPU3_SGBRG10),
+	PIXFMT(IPU3_SGRBG10),
+	PIXFMT(IPU3_SRGGB10),
+	METAFMT(IPU3_PARAMS),
+	METAFMT(IPU3_STAT_3A),
+	METAFMT(IPU3_STAT_DVS),
+	METAFMT(IPU3_STAT_LACE),
 	SYMBOL_END
 };
 
@@ -1164,6 +1186,200 @@ static char *get_v4l2_fract(struct v4l2_fract *f)
 	return buf;
 }
 
+static __u32 get_buffer_bytesused(struct v4l2_buffer *buffer)
+{
+	return V4L2_TYPE_IS_MULTIPLANAR(buffer->type) ? buffer->m.planes[0].bytesused : buffer->bytesused;
+}
+
+static void set_buffer_bytesused(struct v4l2_buffer *buffer, __u32 bytesused)
+{
+	if (V4L2_TYPE_IS_MULTIPLANAR(buffer->type))
+		buffer->m.planes[0].bytesused = bytesused;
+	else
+		buffer->bytesused = bytesused;
+}
+
+static __u32 get_buffer_length(struct v4l2_buffer *buffer)
+{
+	return V4L2_TYPE_IS_MULTIPLANAR(buffer->type) ? buffer->m.planes[0].length : buffer->length;
+}
+
+static void set_buffer_length(struct v4l2_buffer *buffer, __u32 length)
+{
+	if (V4L2_TYPE_IS_MULTIPLANAR(buffer->type))
+		buffer->m.planes[0].length = length;
+	else
+		buffer->length = length;
+}
+
+static unsigned long get_buffer_uptr(struct v4l2_buffer *buffer)
+{
+	return V4L2_TYPE_IS_MULTIPLANAR(buffer->type) ? buffer->m.planes[0].m.userptr : buffer->m.userptr;
+}
+
+static void set_buffer_uptr(struct v4l2_buffer *buffer, unsigned long userptr)
+{
+	if (V4L2_TYPE_IS_MULTIPLANAR(buffer->type))
+		buffer->m.planes[0].m.userptr = userptr;
+	else
+		buffer->m.userptr = userptr;
+}
+
+static __u32 get_buffer_offset(struct v4l2_buffer *buffer)
+{
+	return V4L2_TYPE_IS_MULTIPLANAR(buffer->type) ? buffer->m.planes[0].m.mem_offset : buffer->m.offset;
+}
+
+static __u32 get_format_width(struct v4l2_format *format)
+{
+	if (V4L2_TYPE_IS_META(format->type))
+		return format->fmt.meta.buffersize;
+	else if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
+		return format->fmt.pix_mp.width;
+	else
+		return format->fmt.pix.width;
+}
+
+static void set_format_width(struct v4l2_format *format, __u32 width)
+{
+	if (V4L2_TYPE_IS_META(format->type))
+		return;
+	else if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
+		format->fmt.pix_mp.width = width;
+	else
+		format->fmt.pix.width = width;
+}
+
+static __u32 get_format_height(struct v4l2_format *format)
+{
+	if (V4L2_TYPE_IS_META(format->type))
+		return 1;
+	else if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
+		return format->fmt.pix_mp.height;
+	else
+		return format->fmt.pix.height;
+}
+
+static void set_format_height(struct v4l2_format *format, __u32 height)
+{
+	if (V4L2_TYPE_IS_META(format->type))
+		return;
+	else if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
+		format->fmt.pix_mp.height = height;
+	else
+		format->fmt.pix.height = height;
+}
+
+static __u32 get_format_code(struct v4l2_format *format)
+{
+	if (V4L2_TYPE_IS_META(format->type))
+		return format->fmt.meta.dataformat;
+	else if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
+		return format->fmt.pix_mp.pixelformat;
+	else
+		return format->fmt.pix.pixelformat;
+}
+
+static void set_format_code(struct v4l2_format *format, __u32 code)
+{
+	if (V4L2_TYPE_IS_META(format->type))
+		format->fmt.meta.dataformat = code;
+	else if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
+		format->fmt.pix_mp.pixelformat = code;
+	else
+		format->fmt.pix.pixelformat = code;
+}
+
+static __u32 get_format_field(struct v4l2_format *format)
+{
+	if (V4L2_TYPE_IS_META(format->type))
+		return V4L2_FIELD_NONE;
+	else if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
+		return format->fmt.pix_mp.field;
+	else
+		return format->fmt.pix.field;
+}
+
+static void set_format_field(struct v4l2_format *format, __u32 field)
+{
+	if (V4L2_TYPE_IS_META(format->type))
+		return;
+	else if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
+		format->fmt.pix_mp.field = field;
+	else
+		format->fmt.pix.field = field;
+}
+
+static __u32 get_format_bytesperline(struct v4l2_format *format)
+{
+	if (V4L2_TYPE_IS_META(format->type))
+		return format->fmt.meta.buffersize;
+	else if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
+		return format->fmt.pix_mp.plane_fmt[0].bytesperline;
+	else
+		return format->fmt.pix.bytesperline;
+}
+
+static void set_format_bytesperline(struct v4l2_format *format, __u32 bytesperline)
+{
+	if (V4L2_TYPE_IS_META(format->type))
+		return;
+	else if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
+		format->fmt.pix_mp.plane_fmt[0].bytesperline = bytesperline;
+	else
+		format->fmt.pix.bytesperline = bytesperline;
+}
+
+static __u32 get_format_size(struct v4l2_format *format)
+{
+	if (V4L2_TYPE_IS_META(format->type))
+		return format->fmt.meta.buffersize;
+	else if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
+		return format->fmt.pix_mp.plane_fmt[0].sizeimage;
+	else
+		return format->fmt.pix.sizeimage;
+}
+
+static void set_format_size(struct v4l2_format *format, __u32 size)
+{
+	if (V4L2_TYPE_IS_META(format->type))
+		format->fmt.meta.buffersize = size;
+	else if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
+		format->fmt.pix_mp.plane_fmt[0].sizeimage = size;
+	else
+		format->fmt.pix.sizeimage = size;
+}
+
+static __u32 get_format_colorspace(struct v4l2_format *format)
+{
+	if (V4L2_TYPE_IS_META(format->type))
+		return 0;
+	else if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
+		return format->fmt.pix_mp.colorspace;
+	else
+		return format->fmt.pix.colorspace;
+}
+
+static void set_format_colorspace(struct v4l2_format *format, __u32 colorspace)
+{
+	if (V4L2_TYPE_IS_META(format->type))
+		return;
+	else if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
+		format->fmt.pix_mp.colorspace = colorspace;
+	else
+		format->fmt.pix.colorspace = colorspace;
+}
+
+static void set_format_priv(struct v4l2_format *format, __u32 priv)
+{
+	if (V4L2_TYPE_IS_META(format->type))
+		return;
+	else if (V4L2_TYPE_IS_MULTIPLANAR(format->type))
+		return;
+	else
+		format->fmt.pix.priv = priv;
+}
+
 static void itd_vidioc_enuminput(const char *unused)
 {
 	static const struct symbol_list type[] = {
@@ -1395,16 +1611,17 @@ static void itd_vidioc_parm(const char *s)
 static void print_v4l2_format(int v, struct v4l2_format *f, char c)
 {
 	print(v, "%c type:          %s\n", c, symbol_str(f->type, v4l2_buf_types));
-	if (f->type == V4L2_BUF_TYPE_VIDEO_CAPTURE ||
-	    f->type == V4L2_BUF_TYPE_VIDEO_OUTPUT) {
-		print(v, "%c width:         %i\n", c, f->fmt.pix.width);
-		print(v, "%c height:        %i\n", c, f->fmt.pix.height);
-		print(v, "%c pixelformat:   %s\n", c, symbol_str(f->fmt.pix.pixelformat, pixelformats));
-		print(v, "%c field:         %i\n", c, f->fmt.pix.field);
-		print(v, "%c bytesperline:  %i\n", c, f->fmt.pix.bytesperline);
-		print(v, "%c sizeimage:     %i\n", c, f->fmt.pix.sizeimage);
-		print(v, "%c colorspace:    %i\n", c, f->fmt.pix.colorspace);
-		print(v, "%c priv:          %i\n", c, f->fmt.pix.priv);
+	if (V4L2_TYPE_IS_VIDEO(f->type)) {
+		print(v, "%c width:         %i\n", c, get_format_width(f));
+		print(v, "%c height:        %i\n", c, get_format_height(f));
+		print(v, "%c pixelformat:   %s\n", c, symbol_str(get_format_code(f), pixelformats));
+		print(v, "%c field:         %i\n", c, get_format_field(f));
+		print(v, "%c bytesperline:  %i\n", c, get_format_bytesperline(f));
+		print(v, "%c sizeimage:     %i\n", c, get_format_size(f));
+		print(v, "%c colorspace:    %i\n", c, get_format_colorspace(f));
+	} else if (V4L2_TYPE_IS_META(f->type)) {
+		print(v, "%c format:        %i\n", c, symbol_str(get_format_code(f), pixelformats));
+		print(v, "%c size:          %i\n", c, get_format_size(f));
 	}
 }
 
@@ -1430,14 +1647,14 @@ static void itd_vidioc_fmt(bool try, const char *s)
 		int val[4];
 		switch (token_get(list, &s, val)) {
 		case 't': p.type = val[0]; break;
-		case 'w': p.fmt.pix.width = val[0]; break;
-		case 'h': p.fmt.pix.height = val[0]; break;
-		case 'p': p.fmt.pix.pixelformat = val[0]; break;
-		case 'f': p.fmt.pix.field = val[0]; break;
-		case 'b': p.fmt.pix.bytesperline = val[0]; break;
-		case 's': p.fmt.pix.sizeimage = val[0]; break;
-		case 'c': p.fmt.pix.colorspace = val[0]; break;
-		case 'r': p.fmt.pix.priv = val[0]; break;
+		case 'w': set_format_width(&p, val[0]); break;
+		case 'h': set_format_height(&p, val[0]); break;
+		case 'p': set_format_code(&p, val[0]); break;
+		case 'f': set_format_field(&p, val[0]); break;
+		case 'b': set_format_bytesperline(&p, val[0]); break;
+		case 's': set_format_size(&p, val[0]); break;
+		case 'c': set_format_colorspace(&p, val[0]); break;
+		case 'r': set_format_priv(&p, val[0]); break;
 		}
 	}
 
@@ -1562,10 +1779,6 @@ static void itd_vidioc_sg_selection(const char *s)
 
 	CLEAR(p);
 	p.type = vars.pipes[vars.pipe].reqbufs.type;
-	if (p.type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE)
-		p.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	if (p.type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE)
-		p.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
 
 	while (*s && *s!='?') {
 		int val[4];
@@ -1650,7 +1863,7 @@ static void print_buffer(struct v4l2_buffer *b, char c)
 	const int v = 2;
 	print(v, "%c index:     %i\n", c, b->index);
 	print(v, "%c type:      %s\n", c, symbol_str(b->type, v4l2_buf_types));
-	print(v, "%c bytesused: %i\n", c, b->bytesused);
+	print(v, "%c bytesused: %i\n", c, get_buffer_bytesused(b));
 	print(v, "%c flags:     %s\n", c, symbol_flag_str(b->flags, buf_flags));
 	print(v, "%c field:     %i\n", c, b->field);
 	print(v, "%c timestamp: %i.%06i\n", c, b->timestamp.tv_sec, b->timestamp.tv_usec);
@@ -1660,10 +1873,10 @@ static void print_buffer(struct v4l2_buffer *b, char c)
 	print(v, "%c sequence:  %i\n", c, b->sequence);
 	print(v, "%c memory:    %s\n", c, symbol_str(b->memory, v4l2_memory));
 	if (b->memory == V4L2_MEMORY_MMAP)
-	print(v, "%c offset:    0x%08X\n", c, b->m.offset);
+		print(v, "%c offset:    0x%08X\n", c, get_buffer_offset(b));
 	else if (b->memory == V4L2_MEMORY_USERPTR)
-	print(v, "%c userptr:   0x%08lX\n", c, b->m.userptr);
-	print(v, "%c length:    %i\n", c, b->length);
+		print(v, "%c userptr:   0x%08lX\n", c, get_buffer_uptr(b));
+	print(v, "%c length:    %i\n", c, get_buffer_length(b));
 //	print(v, "%c input:     %i\n", c, b->input);
 }
 
@@ -1675,7 +1888,7 @@ static void itd_vidioc_querybuf_cleanup(void)
 		struct ring_buffer *rb = &vars.pipes[vars.pipe].ring_buffers[i];
 		free(rb->malloc_p);
 		if (rb->mmap_p) {
-			int r = munmap(rb->mmap_p, rb->querybuf.length);
+			int r = munmap(rb->mmap_p, get_buffer_length(&rb->querybuf));
 			if (r) error("munmap failed");
 		}
 		CLEAR(*rb);
@@ -1692,6 +1905,10 @@ static void itd_vidioc_querybuf(const char *unused)
 
 	if (t != V4L2_BUF_TYPE_VIDEO_CAPTURE &&
 	    t != V4L2_BUF_TYPE_VIDEO_OUTPUT &&
+	    t != V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE &&
+	    t != V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE &&
+	    t != V4L2_BUF_TYPE_META_CAPTURE &&
+	    t != V4L2_BUF_TYPE_META_OUTPUT &&
 	    t != V4L2_BUF_TYPE_VIDEO_OVERLAY &&
 	    t != V4L2_BUF_TYPE_VIDEO_OUTPUT_OVERLAY)
 		error("unsupported operation type");
@@ -1710,19 +1927,23 @@ static void itd_vidioc_querybuf(const char *unused)
 		rb->querybuf.type = t;
 		rb->querybuf.memory = vars.pipes[vars.pipe].reqbufs.memory;
 		rb->querybuf.index = i;
+		if (V4L2_TYPE_IS_MULTIPLANAR(t)) {
+			rb->querybuf.length = 1;
+			rb->querybuf.m.planes = rb->planes;
+		}
 		print(1, "VIDIOC_QUERYBUF index:%i\n", rb->querybuf.index);
 		itd_xioctl(VIDIOC_QUERYBUF, &rb->querybuf);
 		print_buffer(&rb->querybuf, '>');
 
 		if (rb->querybuf.memory == V4L2_MEMORY_MMAP) {
-			void *p = mmap(NULL, rb->querybuf.length,
-				PROT_READ | PROT_WRITE, MAP_SHARED, vars.pipes[vars.pipe].fd, rb->querybuf.m.offset);
+			void *p = mmap(NULL, get_buffer_length(&rb->querybuf),
+				PROT_READ | PROT_WRITE, MAP_SHARED, vars.pipes[vars.pipe].fd, get_buffer_offset(&rb->querybuf));
 			if (p == MAP_FAILED)
 				error("mmap failed");
 			rb->mmap_p = p;
 			rb->start = p;
 		} else if (rb->querybuf.memory == V4L2_MEMORY_USERPTR) {
-			int s = PAGE_ALIGN(vars.pipes[vars.pipe].format.fmt.pix.sizeimage) + _PAGE_SIZE - 1;
+			int s = PAGE_ALIGN(get_format_size(&vars.pipes[vars.pipe].format)) + _PAGE_SIZE - 1;
 			void *p = malloc(s);
 			if (p == NULL)
 				error("malloc failed");
@@ -1747,10 +1968,11 @@ static void capture_buffer_stats(void *image, struct v4l2_format *format)
 	if (!vars.calculate_stats)
 		return;
 
-	if (format->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
+	if (format->type != V4L2_BUF_TYPE_VIDEO_CAPTURE &&
+	    format->type != V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE)
 		error("bad buffer type for statistics");
 
-	switch (format->fmt.pix.pixelformat) {
+	switch (get_format_code(format)) {
 	case V4L2_PIX_FMT_SBGGR10:
 	case V4L2_PIX_FMT_SGBRG10:
 	case V4L2_PIX_FMT_SGRBG10:
@@ -1767,11 +1989,11 @@ static void capture_buffer_stats(void *image, struct v4l2_format *format)
 		stat[p][MAX] = 0;
 	}
 
-	stride = format->fmt.pix.bytesperline;
+	stride = get_format_bytesperline(format);
 	line = image;
-	for (y = 0; y < format->fmt.pix.height; y++) {
+	for (y = 0; y < get_format_height(format); y++) {
 		unsigned char *ptr = line;
-		for (x = 0; x < format->fmt.pix.width; x++) {
+		for (x = 0; x < get_format_width(format); x++) {
 			int v = ptr[0] | (ptr[1] << 8);
 			p = ((y & 1) << 1) | (x & 1);
 			stat[p][NUM]++;
@@ -1792,8 +2014,8 @@ static void itd_capture_buffer_save(void *image, struct v4l2_format *format, str
 {
 	struct capture_buffer *cb;
 
-	if (buffer->bytesused < 0 || buffer->bytesused >= MAX_BUFFER_SIZE) {
-		print(1, "Bad buffer size %i bytes. Not processing.\n", buffer->bytesused);
+	if (get_buffer_bytesused(buffer) < 0 || get_buffer_bytesused(buffer) >= MAX_BUFFER_SIZE) {
+		print(1, "Bad buffer size %i bytes. Not processing.\n", get_buffer_bytesused(buffer));
 		return;
 	}
 
@@ -1809,8 +2031,8 @@ static void itd_capture_buffer_save(void *image, struct v4l2_format *format, str
 	}
 
 	cb = &vars.pipes[vars.pipe].capture_buffers[vars.pipes[vars.pipe].num_capture_buffers++];
-	cb->pix_format = format->fmt.pix;
-	cb->length = buffer->bytesused;
+	cb->format = *format;
+	cb->length = get_buffer_bytesused(buffer);
 	cb->image = malloc(cb->length);
 	if (!cb->image)
 		error("out of memory");
@@ -1822,11 +2044,16 @@ static void itd_vidioc_dqbuf(void)
 	enum v4l2_buf_type t = vars.pipes[vars.pipe].reqbufs.type;
 	enum v4l2_memory m = vars.pipes[vars.pipe].reqbufs.memory;
 	struct v4l2_buffer b;
+	struct v4l2_plane planes[VIDEO_MAX_PLANES];
 	int i;
 
 	CLEAR(b);
 	b.type = t;
 	b.memory = m;
+	if (V4L2_TYPE_IS_MULTIPLANAR(t)) {
+		b.length = 1;
+		b.m.planes = planes;
+	}
 	print(1, "VIDIOC_DQBUF ");
 	itd_xioctl(VIDIOC_DQBUF, &b);
 	print_time();
@@ -1835,12 +2062,12 @@ static void itd_vidioc_dqbuf(void)
 	if (i < 0 || i >= MAX_RING_BUFFERS)
 		error("index out of range");
 
-	if (b.bytesused > vars.pipes[vars.pipe].format.fmt.pix.sizeimage)
+	if (get_buffer_bytesused(&b) > get_format_size(&vars.pipes[vars.pipe].format))
 		error("Bad buffer size %i (sizeimage %i)",
-		      b.bytesused, vars.pipes[vars.pipe].format.fmt.pix.sizeimage);
-	if (b.bytesused > vars.pipes[vars.pipe].ring_buffers[i].querybuf.length)
+		      get_buffer_bytesused(&b), get_format_size(&vars.pipes[vars.pipe].format));
+	if (get_buffer_bytesused(&b) > get_buffer_length(&vars.pipes[vars.pipe].ring_buffers[i].querybuf))
 		print(1, "warning: Bad buffer size %i (querybuf %i)\n",
-		      b.bytesused, vars.pipes[vars.pipe].ring_buffers[i].querybuf.length);
+		      get_buffer_bytesused(&b), get_buffer_length(&vars.pipes[vars.pipe].ring_buffers[i].querybuf));
 
 	capture_buffer_stats(vars.pipes[vars.pipe].ring_buffers[i].start, &vars.pipes[vars.pipe].format);
 	itd_capture_buffer_save(vars.pipes[vars.pipe].ring_buffers[i].start, &vars.pipes[vars.pipe].format, &b);
@@ -1851,8 +2078,9 @@ static void itd_vidioc_qbuf(void)
 {
 	enum v4l2_buf_type t = vars.pipes[vars.pipe].reqbufs.type;
 	enum v4l2_memory m = vars.pipes[vars.pipe].reqbufs.memory;
-	__u32 sizeimage = vars.pipes[vars.pipe].format.fmt.pix.sizeimage;
+	__u32 sizeimage = get_format_size(&vars.pipes[vars.pipe].format);
 	struct v4l2_buffer b;
+	struct v4l2_plane planes[VIDEO_MAX_PLANES];
 	int i;
 
 	for (i = 0; i < MAX_RING_BUFFERS; i++)
@@ -1864,18 +2092,23 @@ static void itd_vidioc_qbuf(void)
 	b.type = t;
 	b.index = i;
 	b.memory = m;
+	if (V4L2_TYPE_IS_MULTIPLANAR(t)) {
+		b.length = 1;
+		b.m.planes = planes;
+	}
 
 	if (m == V4L2_MEMORY_USERPTR) {
-		b.m.userptr = (unsigned long)vars.pipes[vars.pipe].ring_buffers[i].start;
-		b.length = sizeimage;
+		set_buffer_uptr(&b, (unsigned long)vars.pipes[vars.pipe].ring_buffers[i].start);
+		set_buffer_length(&b, sizeimage);
 	} else if (m == V4L2_MEMORY_MMAP) {
 		/* Nothing here */
 	} else error("unsupported capture memory");
 
 	if (t == V4L2_BUF_TYPE_VIDEO_OUTPUT ||
+	    t == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE ||
 	    t == V4L2_BUF_TYPE_VIDEO_OVERLAY ||
 	    t == V4L2_BUF_TYPE_VIDEO_OUTPUT_OVERLAY)
-		b.bytesused = sizeimage;
+		set_buffer_bytesused(&b, sizeimage);
 
 	memset(vars.pipes[vars.pipe].ring_buffers[i].start, FILLER, sizeimage);
 	if (vars.pipes[vars.pipe].bufdata) {
@@ -2050,6 +2283,8 @@ static void itd_vidioc_querycap(const char *unused)
 		CAP_FLAG(ASYNCIO),
 		CAP_FLAG(STREAMING),
 		CAP_FLAG(DEVICE_CAPS),
+		CAP_FLAG(META_CAPTURE),
+		CAP_FLAG(META_OUTPUT),
 		SYMBOL_END
 	};
 
@@ -3245,7 +3480,7 @@ static void capture_buffer_write(struct capture_buffer *cb, char *name, int i)
 	}
 
 	print(1, "Writing buffer #%03i (%i bytes) format %s to `%s'\n", i, cb->length,
-		symbol_str(cb->pix_format.pixelformat, pixelformats), b);
+		symbol_str(get_format_code(&cb->format), pixelformats), b);
 	write_file(b, cb->image, cb->length);
 }
 
